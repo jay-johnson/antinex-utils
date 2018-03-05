@@ -1,0 +1,34 @@
+{
+    "layers": [
+        {
+            "num_neurons": 250,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 200,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 150,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 100,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 50,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 1,
+            "init": "uniform",
+            "activation": "sigmoid"
+        }
+    ]
+}

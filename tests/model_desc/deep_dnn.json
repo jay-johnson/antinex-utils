@@ -1,0 +1,74 @@
+{
+    "layers": [
+        {
+            "num_neurons": 50,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 45,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 40,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 35,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 30,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 25,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 20,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 15,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 10,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 9,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 7,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 5,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 3,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 1,
+            "init": "uniform",
+            "activation": "sigmoid"
+        }
+    ]
+}

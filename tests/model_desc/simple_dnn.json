@@ -1,0 +1,19 @@
+{
+    "layers": [
+        {
+            "num_neurons": 12,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 6,
+            "init": "uniform",
+            "activation": "relu"
+        },
+        {
+            "num_neurons": 1,
+            "init": "uniform",
+            "activation": "relu"
+        }
+    ]
+}

@@ -8,10 +8,22 @@ try:
 except ImportError:
     from distutils.core import setup
 
-try:
-    from distutils.command.build_py import build_py_2to3 as build_py
-except ImportError:
-    from distutils.command.build_py import build_py
+from setuptools.command.test import test as TestCommand
+
+
+class PyTest(TestCommand):
+    user_options = [('pytest-args=', 'a', "Arguments to pass to pytest")]
+
+    def initialize_options(self):
+        TestCommand.initialize_options(self)
+        self.pytest_args = ''
+
+    def run_tests(self):
+        import shlex
+        # import here, cause outside the eggs aren't loaded
+        import pytest
+        errno = pytest.main(shlex.split(self.pytest_args))
+        sys.exit(errno)
 
 
 cur_path, cur_script = os.path.split(sys.argv[0])
@@ -52,19 +64,13 @@ if sys.version_info < (3, 5):
         DeprecationWarning)
 
 
-def antinex_utils_test_suite():
-    test_loader = unittest.TestLoader()
-    test_suite = test_loader.discover("tests", pattern="test_*.py")
-    return test_suite
-
-
 # Do not import antinex_utils module here, since deps may not be installed
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "antinex_utils"))
 
 setup(
     name="antinex-utils",
-    cmdclass={"build_py": build_py},
-    version="0.0.1",
+    cmdclass={"test": PyTest},
+    version="0.0.2",
     description="AntiNex Utilities for Keras and Tensorflow",
     long_description="" +
     "Standalone AntiNex Utilities for Keras and Tensorflow",
@@ -79,6 +85,7 @@ setup(
     install_requires=install_requires,
     test_suite="setup.antinex_utils_test_suite",
     tests_require=[
+        "pytest"
     ],
     scripts=[
     ],

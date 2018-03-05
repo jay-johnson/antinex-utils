@@ -15,6 +15,14 @@ from antinex_utils.build_training_request import \
 from keras.models import model_from_json
 from keras.models import Sequential
 from keras.layers import Dense
+from keras.wrappers.scikit_learn import KerasRegressor
+from keras.wrappers.scikit_learn import KerasClassifier
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import confusion_matrix
 import tensorflow as tf
 import matplotlib
 matplotlib.use("Agg")  # noqa
@@ -362,6 +370,7 @@ def make_predictions(
     histories = None
     indexes = None
     scores = None
+    cm = None
     data = {
         "predictions": predictions,
         "rounded_predictions": rounded,
@@ -373,6 +382,7 @@ def make_predictions(
         "image_file": image_file,
         "model": model,
         "indexes": indexes,
+        "confusion_matrix": cm,
         "err": error
     }
     res = {
@@ -384,7 +394,7 @@ def make_predictions(
     try:
 
         label = req.get("label", "no-label-set")
-        last_step = "validaing"
+        last_step = "validating"
         log.info("{} - {}".format(
             label,
             last_step))
@@ -453,18 +463,24 @@ def make_predictions(
         meta_file = manifest.get(
             "meta_file",
             None)
-        epochs = manifest.get(
+        epochs = int(manifest.get(
             "epochs",
-            5)
-        batch_size = manifest.get(
+            "5"))
+        batch_size = int(manifest.get(
             "batch_size",
-            32)
-        test_size = manifest.get(
+            "32"))
+        test_size = float(manifest.get(
             "test_size",
-            5)
+            "0.2"))
+        num_splits = int(manifest.get(
+            "num_splits",
+            "2"))
         verbose = int(manifest.get(
             "verbose",
             "1"))
+        seed = int(manifest.get(
+            "seed",
+            "9"))
         label_rules = manifest.get(
             "label_rules",
             {})
@@ -481,6 +497,42 @@ def make_predictions(
         if csv_file and meta_file and predict_feature:
             if os.path.exists(csv_file) and os.path.exists(meta_file):
                 use_evaluate = True
+
+        numpy.random.seed(seed)
+
+        last_step = ("loading prediction "
+                     "into dataframe seed={}").format(
+                        seed)
+        log.info("{} - {}".format(
+            label,
+            last_step))
+
+        verbose = int(manifest.get(
+            "verbose",
+            "1"))
+        seed = int(manifest.get(
+            "seed",
+            "9"))
+        label_rules = manifest.get(
+            "label_rules",
+            {})
+        if not weights_file:
+            weights_file = manifest.get(
+                "model_weights_file",
+                None)
+        num_features = len(features_to_process)
+        detected_headers = []
+        num_samples = None
+        row_df = None
+        sample_rows = None
+        target_rows = None
+        num_target_rows = None
+        use_evaluate = False
+        if csv_file and meta_file and predict_feature:
+            if os.path.exists(csv_file) and os.path.exists(meta_file):
+                use_evaluate = True
+
+        numpy.random.seed(seed)
 
         last_step = "loading prediction into dataframe"
         log.info("{} - {}".format(
@@ -506,7 +558,9 @@ def make_predictions(
                          label,
                          features_to_process))
             sample_rows = row_df[features_to_process]
+            target_rows = row_df[predict_feature]
             num_samples = len(sample_rows.index)
+            num_target_rows = len(target_rows.index)
         except Exception as f:
             last_step = ("{} - failed during '{}' json={} "
                          "with ex={}").format(
@@ -581,20 +635,55 @@ def make_predictions(
                 "metrics": metrics
             }
 
-            if ml_type == "classification":
+            if ml_type == "standalone-classification":
                 model = build_classification_dnn(
-                            num_features=num_features,
-                            compile_data=compile_data,
-                            label=label,
-                            model_json=model_json,
-                            model_desc=model_desc)
+                        num_features=num_features,
+                        compile_data=compile_data,
+                        label=label,
+                        model_json=model_json,
+                        model_desc=model_desc)
+            elif ml_type == "classification":
+                def set_model():
+                    return build_classification_dnn(
+                        num_features=num_features,
+                        compile_data=compile_data,
+                        label=label,
+                        model_json=model_json,
+                        model_desc=model_desc)
+
+                model = KerasClassifier(
+                            build_fn=set_model,
+                            epochs=epochs,
+                            batch_size=batch_size,
+                            verbose=verbose)
+            elif ml_type == "regression":
+                def set_model():
+                    return build_regression_dnn(
+                        num_features=num_features,
+                        compile_data=compile_data,
+                        label=label,
+                        model_json=model_json,
+                        model_desc=model_desc)
+
+                model = KerasRegressor(
+                            build_fn=set_model,
+                            epochs=epochs,
+                            batch_size=batch_size,
+                            verbose=verbose)
             else:
-                model = build_regression_dnn(
-                            num_features=num_features,
-                            compile_data=compile_data,
-                            label=label,
-                            model_json=model_json,
-                            model_desc=model_desc)
+                def set_model():
+                    return build_regression_dnn(
+                        num_features=num_features,
+                        compile_data=compile_data,
+                        label=label,
+                        model_json=model_json,
+                        model_desc=model_desc)
+
+                model = KerasRegressor(
+                            build_fn=set_model,
+                            epochs=epochs,
+                            batch_size=batch_size,
+                            verbose=verbose)
         except Exception as f:
             last_step = ("{} - failed during '{}' ml_type={} "
                          "model_json={} model_desc={} "
@@ -618,6 +707,79 @@ def make_predictions(
             label,
             last_step))
 
+        ml_req = None
+        if use_evaluate:
+            last_step = ("building training ml_type={} "
+                         "predict_type={} "
+                         "sample_rows={} target_rows={} "
+                         "manifest={}").format(
+                            ml_type,
+                            predict_type,
+                            num_samples,
+                            num_target_rows,
+                            ppj(manifest))
+            log.info("{} - {}".format(
+                label,
+                last_step))
+
+            # build training request for new predicts
+            ml_req = build_training_request(
+                    csv_file=csv_file,
+                    meta_file=meta_file,
+                    predict_feature=predict_feature,
+                    test_size=test_size)
+
+            # fit the model
+            last_step = ("fitting Xtrain={} Ytrain={} Xtest={} Ytest={} "
+                         "epochs={} batch_size={}").format(
+                            len(ml_req["X_train"]),
+                            len(ml_req["Y_train"]),
+                            len(ml_req["X_test"]),
+                            len(ml_req["Y_test"]),
+                            epochs,
+                            batch_size)
+            log.info("{} - {}".format(
+                label,
+                last_step))
+            history = model.fit(
+                        ml_req["X_train"],
+                        ml_req["Y_train"],
+                        validation_data=(
+                            ml_req["X_test"],
+                            ml_req["Y_test"]),
+                        epochs=epochs,
+                        batch_size=batch_size,
+                        shuffle=False,
+                        verbose=verbose)
+
+            # evaluating
+            last_step = ("evaluating "
+                         "num_xtest={} num_ytest={} "
+                         "metrics={} histories={} "
+                         "loss={} optimizer={}").format(
+                            len(ml_req["X_test"]),
+                            len(ml_req["Y_test"]),
+                            metrics,
+                            histories,
+                            loss,
+                            optimizer)
+            log.info("{} - {}".format(
+                label,
+                last_step))
+
+        # end of building training update data
+        # not use_evaluate
+
+        last_step = ("predicting ml_type={} predict_type={} "
+                     "rows={} manifest={}").format(
+                        ml_type,
+                        predict_type,
+                        num_samples,
+                        ppj(manifest))
+        log.info("{} - {}".format(
+            label,
+            last_step))
+
         if os.path.exists(weights_file):
             last_step = ("loading weights_file={}").format(
                             weights_file)
@@ -627,8 +789,12 @@ def make_predictions(
 
             # load the weights from the file on disk
             try:
-                model.load_weights(
-                    weights_file)
+                if ml_type == "standalone-classification":
+                    model.load_weights(
+                        weights_file)
+                else:
+                    model.model.load_weights(
+                        weights_file)
             except Exception as f:
                 last_step = ("{} - failed during '{}' "
                              "file={} weights={}"
@@ -651,106 +817,13 @@ def make_predictions(
                         weights_file))
         # only load weights if the file is still on disk
 
-        ml_req = None
-        if use_evaluate:
-            last_step = ("building training ml_type={} "
-                         "predict_type={} "
-                         "rows={} manifest={}").format(
-                            ml_type,
-                            predict_type,
-                            num_samples,
-                            ppj(manifest))
-            log.info("{} - {}".format(
-                label,
-                last_step))
-
-            # build training request for new predicts
-            ml_req = build_training_request(
-                    csv_file=csv_file,
-                    meta_file=meta_file,
-                    predict_feature=predict_feature,
-                    test_size=test_size)
-
-            # fit the model
-            last_step = ("fitting "
-                         "Xtrain={} Ytrain={} "
-                         "Xtest={} Ytest={} "
-                         "epochs={} "
-                         "batch_size={}").format(
-                            len(ml_req["X_train"]),
-                            len(ml_req["Y_train"]),
-                            len(ml_req["X_test"]),
-                            len(ml_req["Y_test"]),
-                            epochs,
-                            batch_size)
-            log.info("{} - {}".format(
-                label,
-                last_step))
-            history = model.fit(
-                        ml_req["X_train"],
-                        ml_req["Y_train"],
-                        validation_data=(
-                            ml_req["X_test"],
-                            ml_req["Y_test"]),
-                        epochs=epochs,
-                        batch_size=batch_size,
-                        verbose=verbose)
-
-            # evaluating
-            last_step = ("evaluating "
-                         "num_xtest={} num_ytest={} "
-                         "metrics={} histories={} "
-                         "loss={} optimizer={}").format(
-                            len(ml_req["X_test"]),
-                            len(ml_req["Y_test"]),
-                            metrics,
-                            histories,
-                            loss,
-                            optimizer)
-            log.info("{} - {}".format(
-                label,
-                last_step))
-            scores = model.evaluate(
-                        ml_req["X_test"],
-                        ml_req["Y_test"])
-
-        # end of building training update data
-        # not use_evaluate
-
-        try:
-            if len(scores) > 0:
-                accuracy = {
-                    "accuracy": scores[1] * 100
-                }
-            else:
-                log.error(("{} - no scores={} found so no accuracy")
-                          .format(
-                             label,
-                             scores))
-        except Exception as f:
-            accuracy = None
-            last_step = ("{} - failed building accuracy scores={} "
-                         "with ex={}").format(
-                            label,
-                            scores,
-                            f)
-            log.error(last_step)
-        # end of trying to build prediction accuracy
-
-        last_step = ("predicting ml_type={} predict_type={} "
-                     "rows={} manifest={}").format(
-                        ml_type,
-                        predict_type,
-                        num_samples,
-                        ppj(manifest))
-        log.info("{} - {}".format(
-            label,
-            last_step))
-
         # make predictions
         try:
             if should_predict:
-                if ml_type == "classification":
+                if ml_type == "standalone-classification":
+                    scores = model.evaluate(
+                        ml_req["X_test"],
+                        ml_req["Y_test"])
                     predictions = model.predict(
                         sample_rows.values,
                         verbose=verbose)
@@ -758,6 +831,14 @@ def make_predictions(
                     sess = tf.InteractiveSession()  # noqa
                     indexes = tf.argmax(predictions, axis=1)
                     data["indexes"] = indexes
+                    if len(scores) > 1:
+                        accuracy = {
+                            "accuracy": scores[1] * 100
+                        }
+                    else:
+                        accuracy = {
+                            "accuracy": 0.0
+                        }
                     rounded = [round(x[0]) for x in predictions]
                     ridx = 0
                     should_set_labels = False
@@ -790,7 +871,173 @@ def make_predictions(
                         sample_predictions.append(new_row)
                         ridx += 1
                     # end of merging samples with predictions
-
+                elif ml_type == "classification":
+                    estimators = []
+                    estimators.append(
+                        ("standardize",
+                         StandardScaler()))
+                    estimators.append(
+                        ("mlp",
+                         model))
+                    pipeline = Pipeline(estimators)
+                    # https://machinelearningmastery.com/multi-class-classification-tutorial-keras-deep-learning-library/  # noqa
+                    log.info(("{} - starting classification "
+                              "StratifiedKFold splits={} seed={}")
+                             .format(
+                                label,
+                                num_splits,
+                                seed))
+                    kfold = StratifiedKFold(
+                        n_splits=num_splits,
+                        random_state=seed)
+                    log.info(("{} - classification cross_val_score: ")
+                             .format(
+                                 label))
+                    results = cross_val_score(
+                        pipeline,
+                        ml_req["X_train"],
+                        ml_req["Y_train"],
+                        cv=kfold)
+                    scores = [
+                        results.std(),
+                        results.mean()
+                    ]
+                    accuracy = {
+                        "accuracy": results.mean() * 100
+                    }
+                    log.info(("{} - classification accuracy={} samples={}")
+                             .format(
+                                label,
+                                accuracy["accuracy"],
+                                num_samples))
+                    predictions = model.predict(
+                        sample_rows.values,
+                        verbose=verbose)
+                    log.info(("{} - classification confusion_matrix "
+                              "samples={} predictions={} target_rows={}")
+                             .format(
+                                label,
+                                num_samples,
+                                len(predictions),
+                                num_target_rows))
+                    cm = confusion_matrix(
+                        target_rows.values,
+                        predictions)
+                    log.info(("{} - classification has confusion_matrix={} "
+                              "predictions={} target_rows={}")
+                             .format(
+                                label,
+                                cm,
+                                len(predictions),
+                                num_target_rows))
+                    rounded = [round(x[0]) for x in predictions]
+                    ridx = 0
+                    should_set_labels = False
+                    labels_dict = {}
+                    if "labels" in label_rules \
+                       and "label_values" in label_rules:
+                        label_rows = label_rules["label_values"]
+                        for idx, lidx in enumerate(label_rows):
+                            if len(label_rules["labels"]) >= idx:
+                                should_set_labels = True
+                                labels_dict[str(lidx)] = \
+                                    label_rules["labels"][idx]
+                    # end of compiling labels dictionary
+                    log.info(("{} - ml_type={} scores={} accuracy={} "
+                              "merging samples={} with predictions={} "
+                              "labels={}")
+                             .format(
+                                label,
+                                ml_type,
+                                scores,
+                                accuracy.get("accuracy", None),
+                                len(sample_rows.index),
+                                len(rounded),
+                                labels_dict))
+                    for _idx, row in sample_rows.iterrows():
+                        new_row = json.loads(row.to_json())
+                        cur_value = rounded[ridx]
+                        new_row[predict_feature] = int(cur_value)
+                        if should_set_labels:
+                            new_row["label_name"] = \
+                                labels_dict[str(int(cur_value))]
+                        new_row["_row_idx"] = ridx
+                        sample_predictions.append(new_row)
+                        ridx += 1
+                    # end of merging samples with predictions
+                elif ml_type == "regression":
+                    estimators = []
+                    estimators.append(
+                        ("standardize",
+                         StandardScaler()))
+                    estimators.append(
+                        ("mlp",
+                         model))
+                    pipeline = Pipeline(estimators)
+                    log.info(("{} - starting regression kfolds "
+                              "splits={} seed={}")
+                             .format(
+                                label,
+                                num_splits,
+                                seed))
+                    kfold = KFold(
+                        n_splits=num_splits,
+                        random_state=seed)
+                    log.info(("{} - regression cross_val_score "
+                              "kfold={}")
+                             .format(
+                                label,
+                                num_splits))
+                    results = cross_val_score(
+                        pipeline,
+                        sample_rows.values,
+                        target_rows.values,
+                        cv=kfold)
+                    log.info(("{} - regression prediction score: "
+                              "mean={} std={}")
+                             .format(
+                                 label,
+                                 results.mean(),
+                                 results.std()))
+                    scores = [
+                        results.std(),
+                        results.mean()
+                    ]
+                    accuracy = {
+                        "accuracy": results.mean() * 100
+                    }
+                    log.info(("{} - regression accuracy={} samples={}")
+                             .format(
+                                label,
+                                accuracy["accuracy"],
+                                num_samples))
+                    org_predictions = model.predict(
+                        sample_rows.values,
+                        verbose=verbose)
+                    predictions = [float(x) for x in org_predictions]
+                    log.info(("{} - ml_type={} scores={} accuracy={} "
+                              "merging samples={} with predictions={}")
+                             .format(
+                                label,
+                                ml_type,
+                                scores,
+                                accuracy.get("accuracy", None),
+                                len(sample_rows.index),
+                                len(predictions)))
+                    ridx = 0
+                    for _idx, row in sample_rows.iterrows():
+                        new_row = json.loads(row.to_json())
+                        cur_value = predictions[ridx]
+                        new_row[predict_feature] = cur_value
+                        new_row["_row_idx"] = ridx
+                        sample_predictions.append(new_row)
+                        log.debug(("predicting={} target={} predicted={}")
+                                  .format(
+                                     predict_feature,
+                                     target_rows[ridx],
+                                     new_row[predict_feature]))
+                        ridx += 1
+                    # end of merging samples with predictions
                 else:
                     last_step = ("{} - invalid ml_type={} "
                                  "rows={}").format(
@@ -920,13 +1167,18 @@ def make_predictions(
         data["acc"] = accuracy
         data["histories"] = histories
         data["image_file"] = image_file
-        data["model"] = model
+        if ml_type == "standalone-classification":
+            data["model"] = model
+        else:
+            data["model"] = model.model
+
         data["weights"] = model_weights
         data["indexes"] = indexes
         data["scores"] = scores
         data["predictions"] = predictions
         data["rounded"] = rounded
         data["sample_predictions"] = sample_predictions
+        data["confusion_matrix"] = None
 
         res["status"] = SUCCESS
         res["err"] = ""
