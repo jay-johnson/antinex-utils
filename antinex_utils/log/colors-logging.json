@@ -18,7 +18,7 @@
             "class": "logging.handlers.RotatingFileHandler",
             "level": "INFO",
             "formatter": "simple",
-            "filename": "ai-engine.log",
+            "filename": "ai-utils.log",
             "maxBytes": 1048576,
             "backupCount": 1,
             "encoding": "utf8"

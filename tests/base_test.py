@@ -1,10 +1,9 @@
-import logging
+import os
 import json
 import uuid
 import unittest
 import pandas as pd
-
-log = logging.getLogger("base_test")
+from antinex_utils.utils import ppj
 
 
 class BaseTestCase(unittest.TestCase):
@@ -134,7 +133,35 @@ class BaseTestCase(unittest.TestCase):
             "meta": meta_json
         }
 
+        if bool(os.getenv("TEST_DEBUG", "0") == "1"):
+            print(ppj(prediction_req))
+
         return prediction_req
     # end of build_regression_request
+
+    def build_dataset_regression_request(
+            self,
+            data_file=("./tests/datasets/regression/"
+                       "dataset_prediction.json"),
+            predict_rows_file=("./tests/datasets/regression/"
+                               "stock.csv")):
+
+        predict_rows = self.build_prediction_rows(
+            data_file=predict_rows_file)
+
+        dataset_manifest = None
+        with open(data_file) as cur_file:
+            dataset_manifest = json.loads(cur_file.read())
+
+        prediction_req = dataset_manifest
+        prediction_req["label"] = "testing_{}".format(
+                str(uuid.uuid4()))
+        prediction_req["predict_rows"] = predict_rows
+
+        if bool(os.getenv("TEST_DEBUG", "0") == "1"):
+            print(ppj(prediction_req))
+
+        return prediction_req
+    # end of build_dataset_regression_request
 
 # end of BaseTestCase

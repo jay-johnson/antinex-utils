@@ -3,6 +3,7 @@ import uuid
 import json
 import numpy
 import pandas as pd
+import copy
 from antinex_utils.log.setup_logging import build_colorized_logger
 from antinex_utils.consts import SUCCESS
 from antinex_utils.consts import ERR
@@ -23,6 +24,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
 import tensorflow as tf
 import matplotlib
 matplotlib.use("Agg")  # noqa
@@ -257,19 +259,28 @@ def check_request(
     label = req.get("label", "no-label-set")
     predict_rows = req.get("predict_rows", None)
     manifest = req.get("manifest", None)
-    if not manifest:
+    dataset = req.get("dataset", None)
+    if not manifest and not dataset:
         return ("missing manifest "
                 "request={}").format(
                     label,
                     ppj(req))
-    csv_file = manifest.get(
-        "csv_file",
-        None)
-    if not predict_rows and not csv_file:
-        return ("missing prediction rows or csv_file in "
-                "request={}").format(
-                    label,
-                    ppj(req))
+    if manifest:
+        csv_file = manifest.get(
+            "csv_file",
+            None)
+        if not predict_rows and not csv_file:
+            return ("missing prediction rows or csv_file in "
+                    "request={}").format(
+                        label,
+                        ppj(req))
+    if dataset:
+        if not predict_rows:
+            return ("missing prediction rows for dataset in "
+                    "request={}").format(
+                        label,
+                        ppj(req))
+
     return None
 # end of check_request
 
@@ -415,75 +426,110 @@ def make_predictions(
 
         predict_rows = req.get("predict_rows", None)
         verbose = int(req.get("verbose", "1"))
-        manifest = req.get("manifest", None)
+        manifest = req.get("manifest", {})
         model_json = req.get("model_json", None)
         model_desc = req.get("model_desc", None)
         weights_json = req.get("weights_json", None)
         weights_file = req.get("weights_file", None)
         should_predict = req.get("should_predict", True)
+        dataset = req.get("dataset", None)
         save_weights = False
         image_file = req.get("image_file", None)
-        loss = manifest.get(
+        loss = req.get(
             "loss",
-            "mse")
-        optimizer = manifest.get(
-            "optimizer",
-            "adam")
-        metrics = manifest.get(
-            "metrics",
-            [
-                "accuracy"
-            ])
-        histories = manifest.get(
-            "histories",
-            [
-                "val_loss",
-                "val_acc",
+            manifest.get(
                 "loss",
-                "acc"
-            ])
-        ml_type = manifest.get(
+                "mse"))
+        optimizer = req.get(
+            "optimizer",
+            manifest.get(
+                "optimizer",
+                "adam"))
+        metrics = req.get(
+            "metrics",
+            manifest.get(
+                "metrics",
+                [
+                    "accuracy"
+                ]))
+        histories = req.get(
+            "histories",
+            manifest.get(
+                "histories",
+                [
+                    "val_loss",
+                    "val_acc",
+                    "loss",
+                    "acc"
+                ]))
+        ml_type = req.get(
             "ml_type",
-            "classification")
+            manifest.get(
+                "ml_type",
+                "classification"))
+        features_to_process = req.get(
+            "features_to_process",
+            manifest.get(
+                "features_to_process",
+                []))
+        filter_features = req.get(
+            "filter_features",
+            [])
+        ignore_features = req.get(
+            "ignore_features",
+            [])
+        predict_feature = req.get(
+            "predict_feature",
+            manifest.get(
+                "predict_feature",
+                None))
+        epochs = int(req.get(
+            "epochs",
+            manifest.get(
+                "epochs",
+                "5")))
+        batch_size = int(req.get(
+            "batch_size",
+            manifest.get(
+                "batch_size",
+                "32")))
+        test_size = float(req.get(
+            "test_size",
+            manifest.get(
+                "test_size",
+                "0.2")))
+        num_splits = int(req.get(
+            "num_splits",
+            manifest.get(
+                "num_splits",
+                "2")))
+        verbose = int(req.get(
+            "verbose",
+            manifest.get(
+                "verbose",
+                "1")))
+        seed = int(req.get(
+            "seed",
+            manifest.get(
+                "seed",
+                "9")))
+        label_rules = req.get(
+            "label_rules",
+            manifest.get(
+                "label_rules",
+                {}))
         predict_type = manifest.get(
             "predict_type",
             "predict")
         manifest_headers = manifest.get(
             "headers",
             [])
-        features_to_process = manifest.get(
-            "features_to_process",
-            [])
-        predict_feature = manifest.get(
-            "predict_feature",
-            None)
         csv_file = manifest.get(
             "csv_file",
             None)
         meta_file = manifest.get(
             "meta_file",
             None)
-        epochs = int(manifest.get(
-            "epochs",
-            "5"))
-        batch_size = int(manifest.get(
-            "batch_size",
-            "32"))
-        test_size = float(manifest.get(
-            "test_size",
-            "0.2"))
-        num_splits = int(manifest.get(
-            "num_splits",
-            "2"))
-        verbose = int(manifest.get(
-            "verbose",
-            "1"))
-        seed = int(manifest.get(
-            "seed",
-            "9"))
-        label_rules = manifest.get(
-            "label_rules",
-            {})
         if not weights_file:
             weights_file = manifest.get(
                 "model_weights_file",
@@ -493,10 +539,18 @@ def make_predictions(
         num_samples = None
         row_df = None
         sample_rows = None
+        target_rows = None
+        num_target_rows = None
+        ml_req = None
+        max_records = 100000
         use_evaluate = False
         if csv_file and meta_file and predict_feature:
             if os.path.exists(csv_file) and os.path.exists(meta_file):
                 use_evaluate = True
+        else:
+            if dataset:
+                if os.path.exists(dataset):
+                    use_evaluate = True
 
         numpy.random.seed(seed)
 
@@ -520,17 +574,6 @@ def make_predictions(
             weights_file = manifest.get(
                 "model_weights_file",
                 None)
-        num_features = len(features_to_process)
-        detected_headers = []
-        num_samples = None
-        row_df = None
-        sample_rows = None
-        target_rows = None
-        num_target_rows = None
-        use_evaluate = False
-        if csv_file and meta_file and predict_feature:
-            if os.path.exists(csv_file) and os.path.exists(meta_file):
-                use_evaluate = True
 
         numpy.random.seed(seed)
 
@@ -550,13 +593,96 @@ def make_predictions(
                 predict_rows = csv_data.to_json()
             # end of loading from a csv
 
+            if dataset:
+                log.info(("{} loading dataset={}")
+                         .format(
+                            label,
+                            dataset))
+
+                sort_by = req.get(
+                    "sort_values",
+                    None)
+                org_df = None
+                if sort_by:
+                    org_df = pd.read_csv(
+                        dataset,
+                        encoding="utf-8-sig").sort_values(
+                            by=sort_by)
+                else:
+                    org_df = pd.read_csv(
+                        dataset,
+                        encoding="utf-8-sig")
+                # end of loading the df
+
+                log.info(("{} preparing dataset={}")
+                         .format(
+                            label,
+                            dataset))
+                ml_req = {
+                    "X_train": None,
+                    "Y_train": None,
+                    "X_test": None,
+                    "Y_test": None
+                }
+                cur_headers = list(org_df.columns.values)
+                for h in cur_headers:
+                    include_feature = True
+                    if h == predict_feature:
+                        include_feature = False
+                    else:
+                        for f in features_to_process:
+                            if h == f:
+                                include_feature = False
+                                break
+                        for e in ignore_features:
+                            if h == e:
+                                include_feature = False
+                                break
+                    # filter out columns
+
+                    if include_feature:
+                        features_to_process.append(h)
+                # end of building features
+
+                filter_features = copy.deepcopy(features_to_process)
+                filter_features.append(predict_feature)
+
+                num_features = len(features_to_process)
+                log.info(("{} filtering dataset={} filter_features={}")
+                         .format(
+                            label,
+                            len(org_df.index),
+                            ppj(filter_features)))
+                filter_df = org_df[filter_features]
+                log.info(("{} splitting filtered_dataset={} "
+                          "predict_feature={} test_size={} "
+                          "features={} ignore_features={} csv={}")
+                         .format(
+                            label,
+                            len(filter_df.index),
+                            test_size,
+                            predict_feature,
+                            ppj(features_to_process),
+                            ppj(ignore_features),
+                            dataset))
+                # split the data into training
+                (ml_req["X_train"],
+                 ml_req["X_test"],
+                 ml_req["Y_train"],
+                 ml_req["Y_test"]) = train_test_split(
+                    filter_df[features_to_process],
+                    filter_df[predict_feature],
+                    test_size=test_size,
+                    random_state=seed)
+            # end of handling metadata-driven split vs controlled
+
             row_df = pd.read_json(predict_rows)
             detected_headers = list(row_df.columns.values)
             log.info(("{} - setting samples "
                       "to features_to_process={}")
                      .format(
-                         label,
-                         features_to_process))
+                        label,
+                        ppj(features_to_process)))
             sample_rows = row_df[features_to_process]
             target_rows = row_df[predict_feature]
             num_samples = len(sample_rows.index)
@@ -707,7 +833,6 @@ def make_predictions(
             label,
             last_step))
 
-        ml_req = None
         if use_evaluate:
             last_step = ("building training ml_type={} "
                          "predict_type={} "
@@ -723,11 +848,13 @@ def make_predictions(
                 last_step))
 
             # build training request for new predicts
-            ml_req = build_training_request(
-                    csv_file=csv_file,
-                    meta_file=meta_file,
-                    predict_feature=predict_feature,
-                    test_size=test_size)
+
+            if not dataset:
+                ml_req = build_training_request(
+                        csv_file=csv_file,
+                        meta_file=meta_file,
+                        predict_feature=predict_feature,
+                        test_size=test_size)
 
             # fit the model
             last_step = ("fitting Xtrain={} Ytrain={} Xtest={} Ytest={} "
@@ -861,6 +988,12 @@ def make_predictions(
                                 len(sample_rows.index),
                                 labels_dict))
                     for _idx, row in sample_rows.iterrows():
+                        if len(sample_predictions) > max_records:
+                            log.info(("{} hit max={} predictions")
+                                     .format(
+                                         label,
+                                         max_records))
+                            break
                         new_row = json.loads(row.to_json())
                         cur_value = rounded[ridx]
                         new_row[predict_feature] = int(cur_value)
@@ -955,6 +1088,12 @@ def make_predictions(
                                 len(rounded),
                                 labels_dict))
                     for _idx, row in sample_rows.iterrows():
+                        if len(sample_predictions) > max_records:
+                            log.info(("{} hit max={} predictions")
+                                     .format(
+                                         label,
+                                         max_records))
+                            break
                         new_row = json.loads(row.to_json())
                         cur_value = rounded[ridx]
                         new_row[predict_feature] = int(cur_value)
@@ -1026,6 +1165,12 @@ def make_predictions(
                                 len(predictions)))
                     ridx = 0
                     for _idx, row in sample_rows.iterrows():
+                        if len(sample_predictions) > max_records:
+                            log.info(("{} hit max={} predictions")
+                                     .format(
+                                         label,
+                                         max_records))
+                            break
                         new_row = json.loads(row.to_json())
                         cur_value = predictions[ridx]
                         new_row[predict_feature] = cur_value
@@ -1069,10 +1214,18 @@ def make_predictions(
             return res
         # end of try/ex to predict
 
-        last_step = ("packaging predictions={} "
-                     "rows={}").format(
-                        len(rounded),
-                        len(sample_predictions))
+        if ml_type == "classification":
+            last_step = ("packaging {} predictions={} "
+                         "rows={}").format(
+                            ml_type,
+                            len(rounded),
+                            len(sample_rows.index))
+        else:
+            last_step = ("packaging {} predictions={} "
+                         "rows={}").format(
+                            ml_type,
+                            len(sample_predictions),
+                            len(sample_rows.index))
 
         log.info(("{} - {}")
                  .format(

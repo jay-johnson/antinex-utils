@@ -33,7 +33,7 @@ def setup_logging(default_level=logging.INFO,
         return
 
     else:
-        cwd_path = os.getcwd() + "/ai_engine/log/{}".format(
+        cwd_path = os.getcwd() + "/antinex_utils/log/{}".format(
                                     file_name)
         if os.path.exists(cwd_path):
             with open(cwd_path, "rt") as f:
@@ -56,7 +56,7 @@ def setup_logging(default_level=logging.INFO,
 def build_logger(
     name=os.getenv(
         "LOG_NAME",
-        "ai_engine"),
+        "antinex_utils"),
     config="logging.json",
     log_level=logging.INFO,
     log_config_path="{}/logging.json".format(
@@ -76,7 +76,7 @@ def build_logger(
     if not os.path.exists(use_config):
         use_config = log_config_path
         if not os.path.exists(use_config):
-            use_config = ("./ai_engine/log/{}").format(
+            use_config = ("./antinex_utils/log/{}").format(
                             "logging.json")
     # find the log processing
 
@@ -91,7 +91,7 @@ def build_logger(
 def build_colorized_logger(
     name=os.getenv(
         "LOG_NAME",
-        "ai_engine"),
+        "antinex_utils"),
     config="colors-logging.json",
     log_level=logging.INFO,
     log_config_path="{}/logging.json".format(
@@ -111,7 +111,7 @@ def build_colorized_logger(
     if not os.path.exists(use_config):
         use_config = log_config_path
         if not os.path.exists(use_config):
-            use_config = ("./ai_engine/log/{}").format(
+            use_config = ("./antinex_utils/log/{}").format(
                             "logging.json")
     # find the log processing
 

@@ -49,4 +49,16 @@ class TestRegression(BaseTestCase):
             res["data"]["model"])
     # end of test_regression_deep_dnn
 
+    def test_dataset_regression(self):
+        req = self.build_dataset_regression_request()
+        res = make_predictions(req)
+        self.assertEqual(
+            res["status"],
+            SUCCESS)
+        self.assertTrue(
+            res["data"]["model"])
+        self.assertTrue(
+            len(res["data"]["model"].model.layers) == 4)
+    # end of test_dataset_regression
+
 # end of TestRegression
