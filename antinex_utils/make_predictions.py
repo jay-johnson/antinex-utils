@@ -537,7 +537,9 @@ def make_predictions(
         num_features = len(features_to_process)
         detected_headers = []
         num_samples = None
+        org_df = None
         row_df = None
+        filter_df = None
         sample_rows = None
         target_rows = None
         num_target_rows = None
@@ -589,8 +591,8 @@ def make_predictions(
                          .format(
                              label,
                              csv_file))
-                csv_data = pd.read_csv(csv_file)
-                predict_rows = csv_data.to_json()
+                org_df = pd.read_csv(csv_file)
+                predict_rows = org_df.to_json()
             # end of loading from a csv
 
             if dataset:
@@ -602,7 +604,6 @@ def make_predictions(
                 sort_by = req.get(
                     "sort_values",
                     None)
-                org_df = None
                 if sort_by:
                     org_df = pd.read_csv(
                         dataset,
@@ -1164,7 +1165,7 @@ def make_predictions(
                                 len(sample_rows.index),
                                 len(predictions)))
                     ridx = 0
-                    for _idx, row in sample_rows.iterrows():
+                    for idx, row in row_df.iterrows():
                         if len(sample_predictions) > max_records:
                             log.info(("{} hit max={} predictions")
                                      .format(
@@ -1175,6 +1176,7 @@ def make_predictions(
                         cur_value = predictions[ridx]
                         new_row[predict_feature] = cur_value
                         new_row["_row_idx"] = ridx
+                        new_row["_count"] = idx
                         sample_predictions.append(new_row)
                         log.debug(("predicting={} target={} predicted={}")
                                   .format(
