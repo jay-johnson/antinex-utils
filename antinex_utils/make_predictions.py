@@ -680,10 +680,11 @@ def make_predictions(
             row_df = pd.read_json(predict_rows)
             detected_headers = list(row_df.columns.values)
             log.info(("{} - setting samples "
-                      "to features_to_process={}")
+                      "to features_to_process={} cols={}")
                      .format(
                         label,
-                        ppj(features_to_process)))
+                        ppj(features_to_process),
+                        list(row_df.columns.values)))
             sample_rows = row_df[features_to_process]
             target_rows = row_df[predict_feature]
             num_samples = len(sample_rows.index)
