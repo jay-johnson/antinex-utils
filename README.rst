@@ -18,6 +18,21 @@ Development
 
     virtualenv -p python3 ~/.venvs/antinexutils && source ~/.venvs/antinexutils/bin/activate && pip install -e .
 
+Testing
+-------
+
+Run all
+
+::
+
+    python setup.py test
+
+Run a test case
+
+::
+
+    python -m unittest tests.test_classification.TestClassification.test_classification_deep_dnn
+
 Linting
 -------
 
