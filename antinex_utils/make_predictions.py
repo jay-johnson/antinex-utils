@@ -16,6 +16,7 @@ from antinex_utils.build_training_request import \
 from keras.models import model_from_json
 from keras.models import Sequential
 from keras.layers import Dense
+from keras.layers import Dropout
 from keras.wrappers.scikit_learn import KerasRegressor
 from keras.wrappers.scikit_learn import KerasClassifier
 from sklearn.model_selection import cross_val_score
@@ -69,19 +70,29 @@ def build_regression_dnn(
                      model_desc))
         num_layers = 0
         for idx, node in enumerate(model_desc["layers"]):
-            if num_layers == 0:
-                model.add(
-                    Dense(
-                        int(node["num_neurons"]),
-                        input_dim=num_features,
-                        kernel_initializer=node["init"],
-                        activation=node["activation"]))
+            layer_type = node.get(
+                "layer_type",
+                "dense").lower()
+            if layer_type == "dense":
+                if num_layers == 0:
+                    model.add(
+                        Dense(
+                            int(node["num_neurons"]),
+                            input_dim=num_features,
+                            kernel_initializer=node["init"],
+                            activation=node["activation"]))
+                else:
+                    model.add(
+                        Dense(
+                            int(node["num_neurons"]),
+                            kernel_initializer=node["init"],
+                            activation=node["activation"]))
             else:
-                model.add(
-                    Dense(
-                        int(node["num_neurons"]),
-                        kernel_initializer=node["init"],
-                        activation=node["activation"]))
+                if layer_type == "dropout":
+                    model.add(
+                        Dropout(
+                            float(node["rate"])))
+            # end of supported model types
             num_layers += 1
         # end of all layers
     else:
@@ -178,19 +189,29 @@ def build_classification_dnn(
                      model_desc))
         num_layers = 0
         for idx, node in enumerate(model_desc["layers"]):
-            if num_layers == 0:
-                model.add(
-                    Dense(
-                        int(node["num_neurons"]),
-                        input_dim=num_features,
-                        kernel_initializer=node["init"],
-                        activation=node["activation"]))
+            layer_type = node.get(
+                "layer_type",
+                "dense").lower()
+            if layer_type == "dense":
+                if num_layers == 0:
+                    model.add(
+                        Dense(
+                            int(node["num_neurons"]),
+                            input_dim=num_features,
+                            kernel_initializer=node["init"],
+                            activation=node["activation"]))
+                else:
+                    model.add(
+                        Dense(
+                            int(node["num_neurons"]),
+                            kernel_initializer=node["init"],
+                            activation=node["activation"]))
             else:
-                model.add(
-                    Dense(
-                        int(node["num_neurons"]),
-                        kernel_initializer=node["init"],
-                        activation=node["activation"]))
+                if layer_type == "dropout":
+                    model.add(
+                        Dropout(
+                            float(node["rate"])))
+            # end of supported model types
             num_layers += 1
         # end of all layers
     else:
@@ -655,7 +676,14 @@ def make_predictions(
                 # end of building features
 
                 filter_features = copy.deepcopy(features_to_process)
-                filter_features.append(predict_feature)
+                include_predict_feature = True
+                for f in filter_features:
+                    if f == predict_feature:
+                        include_predict_feature = False
+                        break
+
+                if include_predict_feature:
+                    filter_features.append(predict_feature)
 
                 num_features = len(features_to_process)
                 log.info(("{} filtering dataset={} filter_features={}")
