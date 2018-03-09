@@ -4,6 +4,9 @@ import uuid
 import unittest
 import pandas as pd
 from antinex_utils.utils import ppj
+from antinex_utils.consts import SUCCESS
+from antinex_utils.build_scaler_dataset_from_records import \
+    build_scaler_dataset_from_records
 
 
 class BaseTestCase(unittest.TestCase):
@@ -163,5 +166,33 @@ class BaseTestCase(unittest.TestCase):
 
         return prediction_req
     # end of build_dataset_regression_request
+
+    def build_dataset_regression_with_scaler(
+            self,
+            predict_rows_file=("./tests/datasets/regression/"
+                               "stock.csv")):
+
+        predict_rows = pd.read_csv(
+                    predict_rows_file).to_json()
+
+        res = build_scaler_dataset_from_records(
+            record_list=predict_rows)
+
+        self.assertEqual(
+            res["status"],
+            SUCCESS)
+        self.assertTrue(
+            res["scaler"] is not None)
+        self.assertTrue(
+            res["dataset"] is not None)
+        self.assertTrue(
+            res["org_recs"] is not None)
+
+        dataset = res["dataset"]
+        scaler = res["scaler"]
+        res["inverse_recs"] = scaler.inverse_transform(dataset)
+
+        return res
+    # end of build_dataset_regression_with_scaler
 
 # end of BaseTestCase
