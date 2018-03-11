@@ -10,7 +10,6 @@ class TestRegression(BaseTestCase):
 
     def test_regression(self):
         req = self.build_regression_request()
-        print(req)
         res = make_predictions(req)
         self.assertEqual(
             res["status"],
@@ -64,8 +63,8 @@ class TestRegression(BaseTestCase):
             len(res["data"]["model"].model.layers) == 4)
     # end of test_dataset_regression
 
-    def test_dataset_regression_scaler(self):
-        """test_dataset_regression_scaler"""
+    def test_dataset_regression_scaler_utils(self):
+        """test_dataset_regression_scaler_utils"""
         req = self.build_dataset_regression_with_scaler()
         ordered_columns = list(req["org_recs"].columns.values)
         sort_on_index = ordered_columns[0]
@@ -103,6 +102,38 @@ class TestRegression(BaseTestCase):
             row_idx += 1
         # end of for all rows to check for ordering
 
-    # end of test_dataset_regression_scaler
+    # end of test_dataset_regression_scaler_utils
+
+    def test_dataset_regression_using_scaler(self):
+        req = self.build_dataset_regression_request()
+        req["apply_scaler"] = True
+        req["scaler_cast_type"] = "float32"
+        res = make_predictions(req)
+        self.assertEqual(
+            res["status"],
+            SUCCESS)
+        self.assertTrue(
+            res["data"]["model"])
+        self.assertTrue(
+            len(res["data"]["model"].model.layers) == 4)
+
+        predictions = res["data"]["sample_predictions"]
+        self.assertTrue(
+            len(predictions),
+            18)
+    # end of test_dataset_regression_using_scaler
+
+    def test_regression_wide_dnn_with_auto_scaler(self):
+        req = self.build_regression_request(
+            model_desc_file="./tests/model_desc/wide_dnn.json")
+        req["apply_scaler"] = True
+        req["scaler_cast_type"] = "float32"
+        res = make_predictions(req)
+        self.assertEqual(
+            res["status"],
+            SUCCESS)
+        self.assertTrue(
+            res["data"]["model"])
+    # end of test_regression_wide_dnn_with_auto_scaler
 
 # end of TestRegression

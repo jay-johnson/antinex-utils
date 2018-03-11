@@ -13,8 +13,14 @@ from antinex_utils.utils import ev
 from antinex_utils.utils import ppj
 from antinex_utils.build_training_request import \
     build_training_request
-from keras.models import model_from_json
+from antinex_utils.build_scaler_dataset_from_records import \
+    build_scaler_dataset_from_records
+from antinex_utils.build_scaler_train_and_test_datasets import \
+    build_scaler_train_and_test_datasets
+from antinex_utils.merge_inverse_data_into_original import \
+    merge_inverse_data_into_original
 from keras.models import Sequential
+from keras.models import model_from_json
 from keras.layers import Dense
 from keras.layers import Dropout
 from keras.wrappers.scikit_learn import KerasRegressor
@@ -403,6 +409,15 @@ def make_predictions(
     indexes = None
     scores = None
     cm = None
+    scaler_res = None
+    scaler_res_data = None
+    scaler_train = None
+    scaler_test = None
+    scaled_train_dataset = None
+    scaled_test_dataset = None
+    inverse_predictions = None
+    merge_df = None
+    are_predicts_merged = False
     data = {
         "predictions": predictions,
         "rounded_predictions": rounded,
@@ -415,6 +430,14 @@ def make_predictions(
         "model": model,
         "indexes": indexes,
         "confusion_matrix": cm,
+        "scaler_train": scaler_train,
+        "scaler_test": scaler_test,
+        "scaled_train_dataset": scaled_train_dataset,
+        "scaled_test_dataset": scaled_test_dataset,
+        "inverse_predictions": inverse_predictions,
+        "apply_scaler": False,
+        "are_predicts_merged": are_predicts_merged,
+        "merge_df": merge_df,
         "err": error
     }
     res = {
@@ -558,6 +581,21 @@ def make_predictions(
             manifest.get(
                 "label_rules",
                 {}))
+        min_scaler_range = int(req.get(
+            "min_scaler_range",
+            "-1"))
+        max_scaler_range = int(req.get(
+            "max_scaler_range",
+            "1"))
+        apply_scaler = bool(str(req.get(
+            "apply_scaler",
+            "false")).lower() == "true")
+        scaler_cast_to_type = req.get(
+            "scaler_cast_type",
+            "float32")
+        sort_by = req.get(
+            "sort_values",
+            None)
         predict_type = manifest.get(
             "predict_type",
             "predict")
@@ -593,12 +631,17 @@ def make_predictions(
             if dataset:
                 if os.path.exists(dataset):
                     use_evaluate = True
+        # end of if we're building a dataset from these locations
 
         numpy.random.seed(seed)
 
         last_step = ("loading prediction "
-                     "into dataframe seed={}").format(
-                        seed)
+                     "into dataframe seed={} "
+                     "scaler={} range[{},{}]").format(
+                        seed,
+                        apply_scaler,
+                        min_scaler_range,
+                        max_scaler_range)
         log.info("{} - {}".format(
             label,
             last_step))
@@ -617,12 +660,79 @@ def make_predictions(
         # convert json into pandas dataframe for model.predict
         try:
             if new_model and use_evaluate and not predict_rows:
-                log.info(("{} - loading predictions from csv={}")
+                log.info(("{} - loading predictions from csv={} sort={}")
                          .format(
-                             label,
-                             csv_file))
-                org_df = pd.read_csv(csv_file)
+                            label,
+                            csv_file,
+                            sort_by))
+                if sort_by:
+                    org_df = pd.read_csv(
+                            csv_file,
+                            encoding="utf-8-sig").sort_values(
+                            by=sort_by)
+                else:
+                    org_df = pd.read_csv(
+                            csv_file,
+                            encoding="utf-8-sig")
+
                 predict_rows = org_df.to_json()
+                detected_headers = list(org_df.columns.values)
+
+                if apply_scaler:
+                    scaler_transform_res = \
+                        build_scaler_dataset_from_records(
+                            label=label,
+                            record_list=predict_rows,
+                            min_feature=min_scaler_range,
+                            max_feature=max_scaler_range,
+                            cast_to_type=scaler_cast_to_type)
+
+                    if scaler_transform_res["status"] == SUCCESS:
+                        log.info(("{} - scaled dataset predict_rows={} "
+                                  "df={} dataset={}")
+                                 .format(
+                            label,
+                            len(predict_rows),
+                            len(scaler_transform_res["org_recs"].index),
+                            len(scaler_transform_res["dataset"])))
+                    else:
+                        log.error(("{} - failed to scale dataset err={} "
+                                   "predict_rows={} df={} dataset={}")
+                                  .format(
+                            label,
+                            scaler_transform_res["err"],
+                            len(predict_rows),
+                            len(scaler_transform_res["org_recs"].index),
+                            len(scaler_transform_res["dataset"])))
+                    # if scaler works on dataset
+
+                    log.info(("{} building scaled samples and rows")
+                             .format(
+                                label))
+                    # noqa https://stackoverflow.com/questions/21764475/scaling-numbers-column-by-column-with-pandas-python
+                    row_df = pd.DataFrame(
+                                scaler_transform_res["dataset"],
+                                columns=org_df.columns)
+                    sample_rows = row_df[features_to_process]
+                    target_rows = row_df[predict_feature]
+                    num_samples = len(sample_rows.index)
+                    num_target_rows = len(target_rows.index)
+                else:
+                    log.info(("{} - not applying scaler to predict_rows")
+                             .format(
+                                label))
+                    row_df = org_df
+                    log.info(("{} - setting samples "
+                              "to features_to_process={} cols={}")
+                             .format(
+                                label,
+                                ppj(features_to_process),
+                                list(org_df.columns.values)))
+                    sample_rows = row_df[features_to_process]
+                    target_rows = row_df[predict_feature]
+                    num_samples = len(sample_rows.index)
+                    num_target_rows = len(target_rows.index)
+                # if applying scaler to predict rows
             # end of loading from a csv
 
             if dataset:
@@ -631,9 +741,6 @@ def make_predictions(
                             label,
                             dataset))
 
-                sort_by = req.get(
-                    "sort_values",
-                    None)
                 if sort_by:
                     org_df = pd.read_csv(
                         dataset,
@@ -655,12 +762,14 @@ def make_predictions(
                     "X_test": None,
                     "Y_test": None
                 }
+                scaled_train_features = []
                 cur_headers = list(org_df.columns.values)
                 for h in cur_headers:
                     include_feature = True
                     if h == predict_feature:
                         include_feature = False
                     else:
+                        scaled_train_features.append(h)
                         for f in features_to_process:
                             if h == f:
                                 include_feature = False
@@ -685,47 +794,205 @@ def make_predictions(
                 if include_predict_feature:
                     filter_features.append(predict_feature)
 
-                num_features = len(features_to_process)
-                log.info(("{} filtering dataset={} filter_features={}")
-                         .format(
+                if apply_scaler:
+
+                    num_features = len(scaled_train_features)
+                    log.info(("{} scaling dataset={} "
+                              "scaled_train_features={}")
+                             .format(
+                                label,
+                                len(org_df.index),
+                                ppj(scaled_train_features)))
+
+                    scaler_res = \
+                        build_scaler_train_and_test_datasets(
+                            label=label,
+                            train_features=scaled_train_features,
+                            test_feature=predict_feature,
+                            df=org_df,
+                            test_size=test_size,
+                            seed=seed,
+                            scaler_cast_to_type=scaler_cast_to_type,
+                            min_feature_range=min_scaler_range,
+                            max_feature_range=max_scaler_range)
+
+                    if scaler_res["status"] != SUCCESS:
+                        log.info(("{} - scaler transform failed error={}")
+                                 .format(
+                                    label,
+                                    scaler_res["err"]))
+                        res["status"] = ERR
+                        res["err"] = last_step
+                        res["data"] = None
+                        return res
+                    else:
+                        log.info(("{} - scaler transform done")
+                                 .format(
+                                    label))
+                        scaler_res_data = scaler_res["data"]
+                        ml_req["X_train"] = scaler_res_data["x_train"]
+                        ml_req["Y_train"] = scaler_res_data["y_train"]
+                        ml_req["X_test"] = scaler_res_data["x_test"]
+                        ml_req["Y_test"] = scaler_res_data["y_test"]
+
+                        scaler_train = scaler_res_data["scaler_train"]
+                        scaler_test = scaler_res_data["scaler_test"]
+                        scaled_train_dataset = \
+                            scaler_res_data["scaled_train_dataset"]
+                        scaled_test_dataset = \
+                            scaler_res_data["scaled_test_dataset"]
+
+                        scaler_transform_res = \
+                            build_scaler_dataset_from_records(
+                                label=label,
+                                record_list=org_df.to_json(),
+                                min_feature=min_scaler_range,
+                                max_feature=max_scaler_range,
+                                cast_to_type=scaler_cast_to_type)
+
+                        if scaler_transform_res["status"] == SUCCESS:
+                            log.info(("{} - scaled dataset org_df={} "
+                                      "df={} dataset={}")
+                                     .format(
+                                label,
+                                len(predict_rows),
+                                len(scaler_transform_res["org_recs"].index),
+                                len(scaler_transform_res["dataset"])))
+                        else:
+                            log.error(("{} - failed to scale org_df err={} "
+                                       "predict_rows={} df={} dataset={}")
+                                      .format(
+                                label,
+                                scaler_transform_res["err"],
+                                len(predict_rows),
+                                len(scaler_transform_res["org_recs"].index),
+                                len(scaler_transform_res["dataset"])))
+                        # if scaler works on dataset
+
+                        log.info(("{} building org_df scaled "
+                                  "samples and rows")
+                                 .format(
+                                    label))
+                        # noqa https://stackoverflow.com/questions/21764475/scaling-numbers-column-by-column-with-pandas-python
+                        row_df = pd.DataFrame(
+                                    scaler_transform_res["dataset"],
+                                    columns=org_df.columns)
+                        sample_rows = row_df[features_to_process]
+                        target_rows = row_df[predict_feature]
+                        num_samples = len(sample_rows.index)
+                        num_target_rows = len(target_rows.index)
+                    # end of setting up scaler train/test data
+                else:
+                    num_features = len(features_to_process)
+                    log.info(("{} filtering dataset={} filter_features={}")
+                             .format(
+                                label,
+                                len(org_df.index),
+                                ppj(filter_features)))
+                    filter_df = org_df[filter_features]
+
+                    log.info(("{} splitting non-scaled"
+                              "filtered_df={} predict_feature={} test_size={} "
+                              "features={} ignore_features={} csv={}")
+                             .format(
+                                label,
+                                len(filter_df.index),
+                                test_size,
+                                predict_feature,
+                                ppj(features_to_process),
+                                ppj(ignore_features),
+                                dataset))
+                    # split the data into training
+
+                    (ml_req["X_train"],
+                     ml_req["X_test"],
+                     ml_req["Y_train"],
+                     ml_req["Y_test"]) = train_test_split(
+                        filter_df[features_to_process],
+                        filter_df[predict_feature],
+                        test_size=test_size,
+                        random_state=seed)
+
+                    row_df = org_df
+                    log.info(("{} - setting samples "
+                              "to features_to_process={} cols={}")
+                             .format(
+                                label,
+                                ppj(features_to_process),
+                                list(org_df.columns.values)))
+                    sample_rows = row_df[features_to_process]
+                    target_rows = row_df[predict_feature]
+                    num_samples = len(sample_rows.index)
+                    num_target_rows = len(target_rows.index)
+                # if applying scaler to predict rows
+            else:
+                if apply_scaler:
+                    log.info(("{} - no dataset - scaling predict_rows={}")
+                             .format(
+                                label,
+                                len(predict_rows)))
+
+                    org_df = pd.read_json(predict_rows)
+                    row_df = org_df
+                    scaler_transform_res = \
+                        build_scaler_dataset_from_records(
+                            label=label,
+                            record_list=org_df.to_json(),
+                            min_feature=min_scaler_range,
+                            max_feature=max_scaler_range,
+                            cast_to_type=scaler_cast_to_type)
+
+                    if scaler_transform_res["status"] == SUCCESS:
+                        log.info(("{} - scaled predict_rows={} "
+                                  "df={} dataset={}")
+                                 .format(
                             label,
-                            len(org_df.index),
-                            ppj(filter_features)))
-                filter_df = org_df[filter_features]
-                log.info(("{} splitting filtered_dataset={} "
-                          "predict_feature={} test_size={} "
-                          "features={} ignore_features={} csv={}")
-                         .format(
+                            len(predict_rows),
+                            len(scaler_transform_res["org_recs"].index),
+                            len(scaler_transform_res["dataset"])))
+                    else:
+                        log.error(("{} - failed to scale predict err={} "
+                                   "predict_rows={} df={} dataset={}")
+                                  .format(
                             label,
-                            len(filter_df.index),
-                            test_size,
-                            predict_feature,
-                            ppj(features_to_process),
-                            ppj(ignore_features),
-                            dataset))
-                # split the data into training
-                (ml_req["X_train"],
-                 ml_req["X_test"],
-                 ml_req["Y_train"],
-                 ml_req["Y_test"]) = train_test_split(
-                    filter_df[features_to_process],
-                    filter_df[predict_feature],
-                    test_size=test_size,
-                    random_state=seed)
+                            scaler_transform_res["err"],
+                            len(predict_rows),
+                            len(scaler_transform_res["org_recs"].index),
+                            len(scaler_transform_res["dataset"])))
+                    # if scaler works on dataset
+
+                    log.info(("{} building predict org_df scaled "
+                              "samples and rows")
+                             .format(
+                                label))
+                    # noqa https://stackoverflow.com/questions/21764475/scaling-numbers-column-by-column-with-pandas-python
+                    row_df = pd.DataFrame(
+                                scaler_transform_res["dataset"],
+                                columns=org_df.columns)
+                    sample_rows = row_df[features_to_process]
+                    target_rows = row_df[predict_feature]
+                    num_samples = len(sample_rows.index)
+                    num_target_rows = len(target_rows.index)
+                else:
+                    log.info(("{} - no dataset using org_df")
+                             .format(
+                                label))
+
+                    org_df = pd.read_json(predict_rows)
+                    row_df = org_df
+                    log.info(("{} - setting samples "
+                              "to features_to_process={} cols={}")
+                             .format(
+                                label,
+                                ppj(features_to_process),
+                                list(org_df.columns.values)))
+                    sample_rows = row_df[features_to_process]
+                    target_rows = row_df[predict_feature]
+                    num_samples = len(sample_rows.index)
+                    num_target_rows = len(target_rows.index)
+                # end of if apply_scalar to csv + predict_rows
             # end of handling metadata-driven split vs controlled
 
-            row_df = pd.read_json(predict_rows)
-            detected_headers = list(row_df.columns.values)
-            log.info(("{} - setting samples "
-                      "to features_to_process={} cols={}")
-                     .format(
-                        label,
-                        ppj(features_to_process),
-                        list(row_df.columns.values)))
-            sample_rows = row_df[features_to_process]
-            target_rows = row_df[predict_feature]
-            num_samples = len(sample_rows.index)
-            num_target_rows = len(target_rows.index)
         except Exception as f:
             last_step = ("{} - failed during '{}' json={} "
                          "with ex={}").format(
@@ -762,8 +1029,7 @@ def make_predictions(
                     break
             # end of for all detected headers
             if not found_header:
-                last_step = ("{} - invalid predict_rows - "
-                             "header={} in "
+                last_step = ("{} - invalid predict_rows - header={} in "
                              "detected_headers={}").format(
                         label,
                         h,
@@ -780,8 +1046,8 @@ def make_predictions(
         if not weights_file:
             h5_storage_dir = ev(
                 "H5_DIR",
-                "/tmp/")
-            weights_file = "{}/{}".format(
+                "/tmp")
+            weights_file = "{}/{}.h5".format(
                 h5_storage_dir,
                 str(uuid.uuid4()))
         # end of building a weights file
@@ -1069,6 +1335,7 @@ def make_predictions(
                     # end of merging samples with predictions
                 elif ml_type == "classification":
                     if new_model:
+                        last_step = "building estimators"
                         estimators = []
                         estimators.append(
                             ("standardize",
@@ -1076,17 +1343,20 @@ def make_predictions(
                         estimators.append(
                             ("mlp",
                              model))
+                        last_step = "building pipeline"
                         pipeline = Pipeline(estimators)
                         # https://machinelearningmastery.com/multi-class-classification-tutorial-keras-deep-learning-library/  # noqa
-                        log.info(("{} - starting classification "
-                                  "StratifiedKFold splits={} seed={}")
-                                 .format(
-                                    label,
-                                    num_splits,
-                                    seed))
+                        last_step = ("{} - starting classification "
+                                     "StratifiedKFold "
+                                     "splits={} seed={}").format(
+                                        label,
+                                        num_splits,
+                                        seed)
+                        log.info(last_step)
                         kfold = StratifiedKFold(
                             n_splits=num_splits,
                             random_state=seed)
+                        last_step = "cross_val_score"
                         log.info(("{} - classification cross_val_score: ")
                                  .format(
                                     label))
@@ -1193,6 +1463,7 @@ def make_predictions(
                     # end of merging samples with predictions
                 elif ml_type == "regression":
                     if new_model:
+                        last_step = "building new regression model"
                         estimators = []
                         estimators.append(
                             ("standardize",
@@ -1200,6 +1471,7 @@ def make_predictions(
                         estimators.append(
                             ("mlp",
                              model))
+                        last_step = "building pipeline"
                         pipeline = Pipeline(estimators)
                         log.info(("{} - starting regression kfolds "
                                   "splits={} seed={}")
@@ -1207,6 +1479,7 @@ def make_predictions(
                                     label,
                                     num_splits,
                                     seed))
+                        last_step = "starting KFolds"
                         kfold = KFold(
                             n_splits=num_splits,
                             random_state=seed)
@@ -1215,6 +1488,7 @@ def make_predictions(
                                  .format(
                                     label,
                                     num_splits))
+                        last_step = "starting cross_val_score"
                         results = cross_val_score(
                             pipeline,
                             sample_rows.values,
@@ -1226,14 +1500,17 @@ def make_predictions(
                                     label,
                                     results.mean(),
                                     results.std()))
+                        last_step = "getting scores"
                         scores = [
                             results.std(),
                             results.mean()
                         ]
+                        last_step = "getting accuracy"
                         accuracy = {
                             "accuracy": results.mean() * 100
                         }
                     # end of if new model or using existing
+                    last_step = "making predictions on samples"
                     log.info(("{} - regression accuracy={} samples={}")
                              .format(
                                 label,
@@ -1242,45 +1519,77 @@ def make_predictions(
                     org_predictions = model.predict(
                         sample_rows.values,
                         verbose=verbose)
-                    predictions = [float(x) for x in org_predictions]
-                    log.info(("{} - ml_type={} scores={} accuracy={} "
-                              "merging samples={} with predictions={}")
-                             .format(
-                                label,
-                                ml_type,
-                                scores,
-                                accuracy.get("accuracy", None),
-                                len(sample_rows.index),
-                                len(predictions)))
-                    ridx = 0
-                    for idx, row in row_df.iterrows():
-                        if len(sample_predictions) > max_records:
-                            log.info(("{} hit max={} predictions")
-                                     .format(
-                                         label,
-                                         max_records))
-                            break
-                        new_row = json.loads(row.to_json())
-                        cur_value = predictions[ridx]
-                        if predict_feature in row:
-                            new_row["_original_{}".format(
-                                    predict_feature)] = \
-                                row[predict_feature]
-                        else:
-                            new_row["_original_{}".format(
-                                    predict_feature)] = \
-                                "missing-from-dataset"
-                        new_row[predict_feature] = cur_value
-                        new_row["_row_idx"] = ridx
-                        new_row["_count"] = idx
-                        sample_predictions.append(new_row)
-                        log.debug(("predicting={} target={} predicted={}")
-                                  .format(
-                                     predict_feature,
-                                     target_rows[ridx],
-                                     new_row[predict_feature]))
-                        ridx += 1
-                    # end of merging samples with predictions
+                    if apply_scaler and scaler_test:
+                        inverse_predictions = scaler_test.inverse_transform(
+                            org_predictions.reshape(-1, 1)).reshape(-1)
+                        predict_feature_values = \
+                            pd.Series(inverse_predictions)
+                        inverse_predictions_df = pd.DataFrame(
+                            predict_feature_values,
+                            columns=[predict_feature])
+                        predictions = inverse_predictions_df.values
+                        merge_req = {
+                            "org_recs": org_df,
+                            "inverse_recs": inverse_predictions_df
+                        }
+                        merge_res = merge_inverse_data_into_original(
+                            req=merge_req,
+                            sort_on_index=predict_feature,
+                            ordered_columns=[predict_feature])
+
+                        merge_df = merge_res["merge_df"]
+                        sample_predictions = merge_df.to_json()
+                        log.info(("{} - merge_df={}")
+                                 .format(
+                                    label,
+                                    len(sample_predictions)))
+                        are_predicts_merged = True
+                    else:
+                        last_step = "casting predictions to float"
+                        predictions = [float(x) for x in org_predictions]
+
+                        log.info(("{} - ml_type={} scores={} accuracy={} "
+                                  "merging samples={} with predictions={}")
+                                 .format(
+                                    label,
+                                    ml_type,
+                                    scores,
+                                    accuracy.get("accuracy", None),
+                                    len(sample_rows.index),
+                                    len(predictions)))
+                        last_step = "merging predictions with org dataframe"
+                        ridx = 0
+                        for idx, row in row_df.iterrows():
+                            if len(sample_predictions) > max_records:
+                                log.info(("{} hit max={} predictions")
+                                         .format(
+                                            label,
+                                            max_records))
+                                break
+                            new_row = json.loads(row.to_json())
+                            cur_value = predictions[ridx]
+                            if predict_feature in row:
+                                new_row["_original_{}".format(
+                                        predict_feature)] = \
+                                    row[predict_feature]
+                            else:
+                                new_row["_original_{}".format(
+                                        predict_feature)] = \
+                                    "missing-from-dataset"
+                            new_row[predict_feature] = cur_value
+                            new_row["_row_idx"] = ridx
+                            new_row["_count"] = idx
+                            sample_predictions.append(new_row)
+                            log.debug(("predicting={} target={} predicted={}")
+                                      .format(
+                                        predict_feature,
+                                        target_rows[ridx],
+                                        new_row[predict_feature]))
+                            ridx += 1
+                        # end of merging samples with predictions
+                    # handle inverse transform for scaler datasets
+                    last_step = "merging predictions done"
+
                 else:
                     last_step = ("{} - invalid ml_type={} "
                                  "rows={}").format(
@@ -1433,6 +1742,14 @@ def make_predictions(
         data["rounded"] = rounded
         data["sample_predictions"] = sample_predictions
         data["confusion_matrix"] = None
+        data["scaler_train"] = scaler_train
+        data["scaler_test"] = scaler_test
+        data["scaled_train_dataset"] = scaled_train_dataset
+        data["scaled_test_dataset"] = scaled_test_dataset
+        data["inverse_predictions"] = inverse_predictions
+        data["apply_scaler"] = apply_scaler
+        data["merge_df"] = merge_df
+        data["are_predicts_merged"] = are_predicts_merged
 
         res["status"] = SUCCESS
         res["err"] = ""
@@ -1440,11 +1757,12 @@ def make_predictions(
 
     except Exception as e:
         res["status"] = ERR
-        last_step = ("failed {} predictions "
-                     "ex={} request={}").format(
+        last_step = ("failed {} request={} hit ex={} "
+                     "during last_step='{}'").format(
                         label,
+                        ppj(req),
                         e,
-                        ppj(req))
+                        last_step)
         res["err"] = last_step
         res["data"] = None
         log.error(last_step)

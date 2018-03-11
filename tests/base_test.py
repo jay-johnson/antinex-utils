@@ -176,7 +176,8 @@ class BaseTestCase(unittest.TestCase):
                     predict_rows_file).to_json()
 
         res = build_scaler_dataset_from_records(
-            record_list=predict_rows)
+            record_list=predict_rows,
+            cast_to_type="float64")
 
         self.assertEqual(
             res["status"],

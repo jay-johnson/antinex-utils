@@ -33,6 +33,10 @@ Run a test case
 
     python -m unittest tests.test_classification.TestClassification.test_classification_deep_dnn
 
+::
+
+    python -m unittest tests.test_regression.TestRegression.test_dataset_regression_using_scaler
+
 Linting
 -------
 

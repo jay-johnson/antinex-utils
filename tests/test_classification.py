@@ -7,7 +7,6 @@ class TestClassification(BaseTestCase):
 
     def test_classification(self):
         req = self.build_classification_request()
-        print(req)
         res = make_predictions(req)
         self.assertEqual(
             res["status"],

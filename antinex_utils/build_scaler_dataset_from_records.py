@@ -16,7 +16,7 @@ def build_scaler_dataset_from_records(
         label="build-scaled-dataset",
         min_feature=-1,
         max_feature=1,
-        cast_to_type="float64"):
+        cast_to_type="float32"):
     """build_scaler_dataset_from_records
     :param record_list: list of json records to scale between min/max
     :param label: log label for tracking
