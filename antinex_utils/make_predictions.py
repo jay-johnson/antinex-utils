@@ -769,9 +769,9 @@ def make_predictions(
                     if h == predict_feature:
                         include_feature = False
                     else:
-                        scaled_train_features.append(h)
                         for f in features_to_process:
                             if h == f:
+                                scaled_train_features.append(h)
                                 include_feature = False
                                 break
                         for e in ignore_features:
@@ -783,6 +783,20 @@ def make_predictions(
                     if include_feature:
                         features_to_process.append(h)
                 # end of building features
+
+                # make sure to prune out ignored ones:
+                cleaned_scaled_train = []
+                for idx, h in enumerate(scaled_train_features):
+                    should_include = True
+                    for i in ignore_features:
+                        if h == i:
+                            should_include = False
+                    if should_include:
+                        cleaned_scaled_train.append(h)
+                # end of pruning ignored ones
+
+                # assign to cleaned list
+                scaled_train_features = cleaned_scaled_train
 
                 filter_features = copy.deepcopy(features_to_process)
                 include_predict_feature = True
@@ -842,45 +856,48 @@ def make_predictions(
                         scaled_test_dataset = \
                             scaler_res_data["scaled_test_dataset"]
 
-                        scaler_transform_res = \
-                            build_scaler_dataset_from_records(
-                                label=label,
-                                record_list=org_df.to_json(),
-                                min_feature=min_scaler_range,
-                                max_feature=max_scaler_range,
-                                cast_to_type=scaler_cast_to_type)
-
-                        if scaler_transform_res["status"] == SUCCESS:
-                            log.info(("{} - scaled dataset org_df={} "
-                                      "df={} dataset={}")
-                                     .format(
-                                label,
-                                len(predict_rows),
-                                len(scaler_transform_res["org_recs"].index),
-                                len(scaler_transform_res["dataset"])))
-                        else:
-                            log.error(("{} - failed to scale org_df err={} "
-                                       "predict_rows={} df={} dataset={}")
-                                      .format(
-                                label,
-                                scaler_transform_res["err"],
-                                len(predict_rows),
-                                len(scaler_transform_res["org_recs"].index),
-                                len(scaler_transform_res["dataset"])))
-                        # if scaler works on dataset
-
-                        log.info(("{} building org_df scaled "
-                                  "samples and rows")
+                        log.info(("{} - building scaled row_df "
+                                  "filter_features={}")
                                  .format(
-                                    label))
+                                    label,
+                                    filter_features))
+
                         # noqa https://stackoverflow.com/questions/21764475/scaling-numbers-column-by-column-with-pandas-python
+                        last_step = ("building row_df from scaled ds "
+                                     "train_features={}").format(
+                                        scaled_train_features)
                         row_df = pd.DataFrame(
-                                    scaler_transform_res["dataset"],
-                                    columns=org_df.columns)
-                        sample_rows = row_df[features_to_process]
-                        target_rows = row_df[predict_feature]
+                            scaler_res_data["scaled_train_dataset"],
+                            columns=list(scaled_train_features))
+                        last_step = ("building samples from rows_df={} "
+                                     "train_features={}").format(
+                                        len(row_df.index),
+                                        scaled_train_features)
+                        sample_rows = pd.DataFrame(
+                            scaler_res_data["scaled_train_dataset"],
+                            columns=list(scaled_train_features))
+                        last_step = ("building targets from scaled ds "
+                                     "predict_feature={}").format(
+                                        predict_feature)
+                        target_rows = pd.DataFrame(
+                            scaler_res_data["scaled_test_dataset"],
+                            columns=[predict_feature])
+                        last_step = ("adding predict_feature={} to "
+                                     "row_df").format(
+                                        predict_feature)
+                        row_df[predict_feature] = \
+                            scaler_res_data["scaled_test_dataset"]
+                        last_step = ("counting num_sample_rows")
                         num_samples = len(sample_rows.index)
+                        last_step = ("counting num_target_rows")
                         num_target_rows = len(target_rows.index)
+                        log.info(("{} row_df created features={} "
+                                  "num_samples={} num_targets={}")
+                                 .format(
+                                    label,
+                                    features_to_process,
+                                    num_samples,
+                                    num_target_rows))
                     # end of setting up scaler train/test data
                 else:
                     num_features = len(features_to_process)
