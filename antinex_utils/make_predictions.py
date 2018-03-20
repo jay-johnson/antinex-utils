@@ -287,8 +287,21 @@ def check_request(
     predict_rows = req.get("predict_rows", None)
     manifest = req.get("manifest", None)
     dataset = req.get("dataset", None)
-    if not manifest and not dataset:
-        return ("missing manifest "
+    csv_file = req.get("csv_file", None)
+    use_existing_model = req.get("use_existing_model", False)
+
+    if use_existing_model:
+        if not predict_rows and not dataset:
+            return ("{} missing predict_rows or dataset for existing model"
+                    "request={}").format(
+                        label,
+                        req)
+        else:
+            return None
+    # existing models just need a couple rows or a dataset to work
+
+    if not manifest and not dataset and not predict_rows and not csv_file:
+        return ("{} missing manifest "
                 "request={}").format(
                     label,
                     ppj(req))
@@ -297,16 +310,16 @@ def check_request(
             "csv_file",
             None)
         if not predict_rows and not csv_file:
-            return ("missing prediction rows or csv_file in "
+            return ("{} missing predict_rows or csv_file in "
                     "request={}").format(
                         label,
                         ppj(req))
-    if dataset:
-        if not predict_rows:
-            return ("missing prediction rows for dataset in "
-                    "request={}").format(
-                        label,
-                        ppj(req))
+
+    if not dataset and not predict_rows and not csv_file:
+        return ("{} missing dataset or predict_rows or csv_file in "
+                "request={}").format(
+                    label,
+                    ppj(req))
 
     return None
 # end of check_request
@@ -418,6 +431,7 @@ def make_predictions(
     inverse_predictions = None
     merge_df = None
     are_predicts_merged = False
+    existing_model_dict = None
     data = {
         "predictions": predictions,
         "rounded_predictions": rounded,
@@ -631,6 +645,9 @@ def make_predictions(
             if dataset:
                 if os.path.exists(dataset):
                     use_evaluate = True
+            else:
+                if predict_rows and not existing_model_dict:
+                    use_evaluate = True
         # end of if we're building a dataset from these locations
 
         numpy.random.seed(seed)
@@ -649,8 +666,6 @@ def make_predictions(
             weights_file = manifest.get(
                 "model_weights_file",
                 None)
-
-        numpy.random.seed(seed)
 
         last_step = "loading prediction into dataframe"
         log.info("{} - {}".format(
@@ -978,8 +993,23 @@ def make_predictions(
                             len(scaler_transform_res["dataset"])))
                     # if scaler works on dataset
 
+                    log.info(("{} casting data to floats")
+                             .format(
+                                label))
+
+                    ml_req = {
+                        "X_train": org_df[features_to_process].astype(
+                            "float32").values,
+                        "Y_train": org_df[predict_feature].astype(
+                            "float32").values,
+                        "X_test": org_df[features_to_process].astype(
+                            "float32").values,
+                        "Y_test": org_df[predict_feature].astype(
+                            "float32").values
+                    }
+
                     log.info(("{} building predict org_df scaled "
-                              "samples and rows")
+                              "for testing all samples and predict_rows")
                              .format(
                                 label))
                     # noqa https://stackoverflow.com/questions/21764475/scaling-numbers-column-by-column-with-pandas-python
@@ -1178,7 +1208,7 @@ def make_predictions(
 
             # build training request for new predicts
 
-            if not dataset:
+            if not dataset and csv_file:
                 ml_req = build_training_request(
                         csv_file=csv_file,
                         meta_file=meta_file,
@@ -1774,12 +1804,20 @@ def make_predictions(
 
     except Exception as e:
         res["status"] = ERR
-        last_step = ("failed {} request={} hit ex={} "
-                     "during last_step='{}'").format(
-                        label,
-                        ppj(req),
-                        e,
-                        last_step)
+        if existing_model_dict:
+            last_step = ("failed {} existing_model request={} hit ex={} "
+                         "during last_step='{}'").format(
+                            label,
+                            req,
+                            e,
+                            last_step)
+        else:
+            last_step = ("failed {} request={} hit ex={} "
+                         "during last_step='{}'").format(
+                            label,
+                            ppj(req),
+                            e,
+                            last_step)
         res["err"] = last_step
         res["data"] = None
         log.error(last_step)
