@@ -309,9 +309,9 @@ def check_request(
         csv_file = manifest.get(
             "csv_file",
             None)
-        if not predict_rows and not csv_file:
-            return ("{} missing predict_rows or csv_file in "
-                    "request={}").format(
+        if not predict_rows and not csv_file and not dataset:
+            return ("{} missing dataset predict_rows or csv_file in "
+                    "manifest of request={}").format(
                         label,
                         ppj(req))
 
@@ -610,6 +610,9 @@ def make_predictions(
         sort_by = req.get(
             "sort_values",
             None)
+        max_records = int(req.get(
+            "max_records",
+            "100000"))
         predict_type = manifest.get(
             "predict_type",
             "predict")
@@ -636,7 +639,6 @@ def make_predictions(
         target_rows = None
         num_target_rows = None
         ml_req = None
-        max_records = 100000
         use_evaluate = False
         if csv_file and meta_file and predict_feature:
             if os.path.exists(csv_file) and os.path.exists(meta_file):
@@ -645,6 +647,7 @@ def make_predictions(
             if dataset:
                 if os.path.exists(dataset):
                     use_evaluate = True
+                    csv_file = dataset
             else:
                 if predict_rows and not existing_model_dict:
                     use_evaluate = True
@@ -667,7 +670,8 @@ def make_predictions(
                 "model_weights_file",
                 None)
 
-        last_step = "loading prediction into dataframe"
+        last_step = "loading prediction into dataframe req={}".format(
+            req)
         log.info("{} - {}".format(
             label,
             last_step))
@@ -675,9 +679,12 @@ def make_predictions(
         # convert json into pandas dataframe for model.predict
         try:
             if new_model and use_evaluate and not predict_rows:
-                log.info(("{} - loading predictions from csv={} sort={}")
+                log.info(("{} - loading predictions new_model={} "
+                          "evaluate={} csv={} sort={}")
                          .format(
                             label,
+                            new_model,
+                            use_evaluate,
                             csv_file,
                             sort_by))
                 if sort_by:
@@ -1027,6 +1034,23 @@ def make_predictions(
 
                     org_df = pd.read_json(predict_rows)
                     row_df = org_df
+
+                    ml_req = {
+                        "X_train": org_df[features_to_process].astype(
+                            "float32").values,
+                        "Y_train": org_df[predict_feature].astype(
+                            "float32").values,
+                        "X_test": org_df[features_to_process].astype(
+                            "float32").values,
+                        "Y_test": org_df[predict_feature].astype(
+                            "float32").values
+                    }
+
+                    log.info(("{} building predict org_df scaled "
+                              "for testing all samples WITHOUT predict_rows")
+                             .format(
+                                label))
+
                     log.info(("{} - setting samples "
                               "to features_to_process={} cols={}")
                              .format(
