@@ -670,8 +670,7 @@ def make_predictions(
                 "model_weights_file",
                 None)
 
-        last_step = "loading prediction into dataframe req={}".format(
-            req)
+        last_step = "loading prediction into dataframe"
         log.info("{} - {}".format(
             label,
             last_step))
