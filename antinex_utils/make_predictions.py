@@ -401,6 +401,51 @@ def save_prediction_image(
 # end of save_prediction_image
 
 
+def build_train_and_test_features(
+        df_columns,
+        features_to_process,
+        predict_feature,
+        ignore_features):
+    """build_train_and_test_features
+
+    Order matters when slicing up datasets using scalers...
+
+    if not, then something that is an int/bool can get into a float
+    column and that is really bad for making predictions
+    with new or pre-trained models...
+
+    :param df_columns: columns in the dataframe
+    :param features_to_process: requested features to train
+    :param predict_feature: requested feature to predict
+    :param ignore_features: requested non-numeric/not-wanted features
+    """
+    train_and_test_features = []
+
+    # for all columns in the data
+    # add columns in order if they are in the requested:
+    # features_to_process list and not in the ignore_features
+    for c in df_columns:
+        if c == predict_feature:
+            train_and_test_features.append(
+                c)
+        else:
+            add_feature = True
+            for i in ignore_features:
+                if i == c:
+                    add_feature = False
+                    break
+            if add_feature:
+                for f in features_to_process:
+                    if f == c:
+                        train_and_test_features.append(
+                            c)
+                        break
+    # end of filtering features before scalers
+
+    return train_and_test_features
+# end of build_train_and_test_features
+
+
 def make_predictions(
         req):
     """make_predictions
@@ -670,7 +715,8 @@ def make_predictions(
                 "model_weights_file",
                 None)
 
-        last_step = "loading prediction into dataframe"
+        last_step = ("loading prediction into dataframe")
+
         log.info("{} - {}".format(
             label,
             last_step))
@@ -700,10 +746,34 @@ def make_predictions(
                 detected_headers = list(org_df.columns.values)
 
                 if apply_scaler:
+
+                    for f in features_to_process:
+                        if f not in org_df.columns:
+                            log.error(("{} "
+                                       "csv={} is missing column={}")
+                                      .format(
+                                        label,
+                                        csv_file,
+                                        f))
+                    # show columns that were supposed to be in the
+                    # dataset but are not
+
+                    train_and_test_features = \
+                        build_train_and_test_features(
+                            org_df.columns,
+                            features_to_process,
+                            predict_feature,
+                            ignore_features)
+
+                    log.info(("building csv scalers all_features={}")
+                             .format(
+                                train_and_test_features))
+
                     scaler_transform_res = \
                         build_scaler_dataset_from_records(
                             label=label,
-                            record_list=predict_rows,
+                            record_list=org_df[
+                                train_and_test_features].to_json(),
                             min_feature=min_scaler_range,
                             max_feature=max_scaler_range,
                             cast_to_type=scaler_cast_to_type)
@@ -733,7 +803,8 @@ def make_predictions(
                     # noqa https://stackoverflow.com/questions/21764475/scaling-numbers-column-by-column-with-pandas-python
                     row_df = pd.DataFrame(
                                 scaler_transform_res["dataset"],
-                                columns=org_df.columns)
+                                columns=org_df[
+                                    train_and_test_features].columns)
                     sample_rows = row_df[features_to_process]
                     target_rows = row_df[predict_feature]
                     num_samples = len(sample_rows.index)
@@ -972,10 +1043,33 @@ def make_predictions(
 
                     org_df = pd.read_json(predict_rows)
                     row_df = org_df
+
+                    for f in features_to_process:
+                        if f not in org_df.columns:
+                            log.error(("{} "
+                                       "predict_rows are missing column={}")
+                                      .format(
+                                        label,
+                                        f))
+                    # show columns that were supposed to be in the
+                    # predict_rows but are not
+
+                    train_and_test_features = \
+                        build_train_and_test_features(
+                            org_df.columns,
+                            features_to_process,
+                            predict_feature,
+                            ignore_features)
+
+                    log.info(("building predict_rows scalers all_features={}")
+                             .format(
+                                train_and_test_features))
+
                     scaler_transform_res = \
                         build_scaler_dataset_from_records(
                             label=label,
-                            record_list=org_df.to_json(),
+                            record_list=org_df[
+                                train_and_test_features].to_json(),
                             min_feature=min_scaler_range,
                             max_feature=max_scaler_range,
                             cast_to_type=scaler_cast_to_type)
@@ -999,29 +1093,32 @@ def make_predictions(
                             len(scaler_transform_res["dataset"])))
                     # if scaler works on dataset
 
+                    log.info(("{} building predict org_df scaled "
+                              "for testing all samples and predict_rows")
+                             .format(
+                                label))
+
+                    # noqa https://stackoverflow.com/questions/21764475/scaling-numbers-column-by-column-with-pandas-python
+                    row_df = pd.DataFrame(
+                                scaler_transform_res["dataset"],
+                                columns=org_df[
+                                    train_and_test_features].columns)
+
                     log.info(("{} casting data to floats")
                              .format(
                                 label))
 
                     ml_req = {
-                        "X_train": org_df[features_to_process].astype(
+                        "X_train": row_df[features_to_process].astype(
                             "float32").values,
-                        "Y_train": org_df[predict_feature].astype(
+                        "Y_train": row_df[predict_feature].astype(
                             "float32").values,
-                        "X_test": org_df[features_to_process].astype(
+                        "X_test": row_df[features_to_process].astype(
                             "float32").values,
-                        "Y_test": org_df[predict_feature].astype(
+                        "Y_test": row_df[predict_feature].astype(
                             "float32").values
                     }
 
-                    log.info(("{} building predict org_df scaled "
-                              "for testing all samples and predict_rows")
-                             .format(
-                                label))
-                    # noqa https://stackoverflow.com/questions/21764475/scaling-numbers-column-by-column-with-pandas-python
-                    row_df = pd.DataFrame(
-                                scaler_transform_res["dataset"],
-                                columns=org_df.columns)
                     sample_rows = row_df[features_to_process]
                     target_rows = row_df[predict_feature]
                     num_samples = len(sample_rows.index)
