@@ -1,6 +1,9 @@
 AntiNex Utilities
 =================
 
+.. image:: https://travis-ci.org/jay-johnson/antinex-utils.svg?branch=master
+    :target: https://travis-ci.org/jay-johnson/antinex-utils
+
 Standalone utilities for training AI.
 
 Used in:
