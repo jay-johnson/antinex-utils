@@ -39,3 +39,4 @@ py3venv
 *.tiff
 *.gif
 *.egg-info
+.pytest_cache
