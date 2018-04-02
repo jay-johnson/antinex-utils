@@ -13,7 +13,7 @@ Handles running:
 #.  Cross Validating Models
 #.  Merging Predictions with Original Records
 
-It looks like this fails to build on readthedocs. Here is the file on GitHub in case the ``automodule`` failed:
+Here is the file on GitHub in case the ``automodule`` failed to process:
 
 `make_predictions.py`_
 
