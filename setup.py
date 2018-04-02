@@ -29,16 +29,22 @@ class PyTest(TestCommand):
 cur_path, cur_script = os.path.split(sys.argv[0])
 os.chdir(os.path.abspath(cur_path))
 
+requires_that_fail_on_rtd = [
+    "antinex-utils",
+    "docker-compose",
+    "h5py",
+    "tables",
+    "tensorflow"
+]
+
 install_requires = [
-    "celery",
+    "celery>=4.1.0",
     "celery-connectors",
     "celery-loaders",
     "colorlog",
     "coverage",
-    "docker-compose",
     "flake8>=3.4.1",
     "future",
-    "h5py",
     "keras",
     "matplotlib",
     "numpy",
@@ -48,15 +54,20 @@ install_requires = [
     "pycodestyle",
     "pydocstyle",
     "pylint",
-    "scikit-learn",
+    "recommonmark",
     "requests",
-    "tables",
-    "tensorflow",
+    "scikit-learn",
+    "sphinx",
+    "sphinx-autobuild",
+    "sphinx_rtd_theme",
     "tox",
     "unittest2",
     "mock"
 ]
 
+# if not on readthedocs.io get all the pips:
+if os.getenv("READTHEDOCS", "") == "":
+    install_requires = install_requires + requires_that_fail_on_rtd
 
 if sys.version_info < (3, 5):
     warnings.warn(
