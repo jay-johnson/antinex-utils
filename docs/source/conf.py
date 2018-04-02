@@ -28,8 +28,10 @@ if os.getenv("READTHEDOCS", "") != "":
             return MagicMock()
 
     MOCK_MODULES = [
+        'antinex_utils',
         'h5py',
-        'pycurl'
+        'pycurl',
+        'tensorflow'
     ]
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 

@@ -30,13 +30,14 @@ cur_path, cur_script = os.path.split(sys.argv[0])
 os.chdir(os.path.abspath(cur_path))
 
 requires_that_fail_on_rtd = [
+    "antinex-utils",
     "docker-compose",
     "h5py",
-    "tables"
+    "tables",
+    "tensorflow"
 ]
 
 install_requires = [
-    "antinex-utils",
     "celery>=4.1.0",
     "celery-connectors",
     "celery-loaders",
@@ -59,7 +60,6 @@ install_requires = [
     "sphinx",
     "sphinx-autobuild",
     "sphinx_rtd_theme",
-    "tensorflow",
     "tox",
     "unittest2",
     "mock"
