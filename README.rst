@@ -2,7 +2,13 @@ AntiNex Utilities
 =================
 
 .. image:: https://travis-ci.org/jay-johnson/antinex-utils.svg?branch=master
+    :alt: Travis AntiNex AI Utilities Tests
     :target: https://travis-ci.org/jay-johnson/antinex-utils
+
+.. image:: https://readthedocs.org/projects/antinex-client/badge/?version=latest
+    :alt: Read the Docs AntiNex AI Utilities Tests
+    :target: https://readthedocs.org/projects/antinex-client/badge/?version=latest
+
 
 Standalone utilities for training AI.
 
