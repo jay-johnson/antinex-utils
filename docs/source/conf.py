@@ -17,21 +17,19 @@
 
 import os
 import sys
-from mock import Mock as MagicMock
+from unittest.mock import MagicMock
+
 
 html_theme_options = {}
 if os.getenv("READTHEDOCS", "") != "":
     class Mock(MagicMock):
         @classmethod
         def __getattr__(cls, name):
-            return Mock()
+            return MagicMock()
 
     MOCK_MODULES = [
-        'celery-connectors',
         'h5py',
-        'keras',
-        'pycurl',
-        'tensorflow'
+        'pycurl'
     ]
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 

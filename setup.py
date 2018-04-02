@@ -30,14 +30,13 @@ cur_path, cur_script = os.path.split(sys.argv[0])
 os.chdir(os.path.abspath(cur_path))
 
 requires_that_fail_on_rtd = [
-    "antinex-utils",
     "docker-compose",
     "h5py",
-    "tables",
-    "tensorflow"
+    "tables"
 ]
 
 install_requires = [
+    "antinex-utils",
     "celery>=4.1.0",
     "celery-connectors",
     "celery-loaders",
@@ -60,6 +59,7 @@ install_requires = [
     "sphinx",
     "sphinx-autobuild",
     "sphinx_rtd_theme",
+    "tensorflow",
     "tox",
     "unittest2",
     "mock"
@@ -81,7 +81,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "antinex_utils"))
 setup(
     name="antinex-utils",
     cmdclass={"test": PyTest},
-    version="1.0.10",
+    version="1.0.11",
     description="AntiNex Utilities for Keras and Tensorflow",
     long_description="" +
     "Standalone AntiNex Utilities for Keras and Tensorflow",
