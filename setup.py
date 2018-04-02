@@ -30,14 +30,15 @@ cur_path, cur_script = os.path.split(sys.argv[0])
 os.chdir(os.path.abspath(cur_path))
 
 requires_that_fail_on_rtd = [
-    "antinex-utils",
     "docker-compose",
     "h5py",
+    "keras",
     "tables",
     "tensorflow"
 ]
 
 install_requires = [
+    "antinex-utils",
     "celery>=4.1.0",
     "celery-connectors",
     "celery-loaders",
@@ -45,7 +46,6 @@ install_requires = [
     "coverage",
     "flake8>=3.4.1",
     "future",
-    "keras",
     "matplotlib",
     "numpy",
     "pandas",
@@ -81,7 +81,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "antinex_utils"))
 setup(
     name="antinex-utils",
     cmdclass={"test": PyTest},
-    version="1.0.12",
+    version="1.0.13",
     description="AntiNex Utilities for Keras and Tensorflow",
     long_description="" +
     "Standalone AntiNex Utilities for Keras and Tensorflow",
