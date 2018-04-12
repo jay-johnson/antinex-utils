@@ -44,7 +44,7 @@ install_requires = [
     "celery-loaders",
     "colorlog",
     "coverage",
-    "flake8>=3.4.1",
+    "flake8",
     "future",
     "matplotlib",
     "numpy",
@@ -81,7 +81,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "antinex_utils"))
 setup(
     name="antinex-utils",
     cmdclass={"test": PyTest},
-    version="1.0.13",
+    version="1.0.14",
     description="AntiNex Utilities for Keras and Tensorflow",
     long_description="" +
     "Standalone AntiNex Utilities for Keras and Tensorflow",
