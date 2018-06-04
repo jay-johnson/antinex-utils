@@ -22,9 +22,20 @@ pip install antinex-utils
 
 Development
 -----------
-::
 
-    virtualenv -p python3 ~/.venvs/antinexutils && source ~/.venvs/antinexutils/bin/activate && pip install -e .
+#.  Set up the repository
+
+    ::
+
+        mkdir -p -m 777 /opt/antinex
+        git clone https://github.com/jay-johnson/antinex-utils.git /opt/antinex/utils
+        cd /opt/antinex/utils
+
+#.  Set up the virtual env and install
+
+    ::
+
+        virtualenv -p python3 ~/.venvs/antinexutils && source ~/.venvs/antinexutils/bin/activate && pip install -e .
 
 Testing
 -------

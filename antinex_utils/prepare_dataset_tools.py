@@ -569,7 +569,7 @@ def build_csv(
 
 def find_all_pipeline_csvs(
         use_log_id=None,
-        csv_glob_path="/opt/datasets/**/*.csv"):
+        csv_glob_path="/opt/antinex/datasets/**/*.csv"):
     """find_all_pipeline_csvs
 
     :param use_log_id: label for logs
