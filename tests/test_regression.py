@@ -59,8 +59,9 @@ class TestRegression(BaseTestCase):
             SUCCESS)
         self.assertTrue(
             res["data"]["model"])
-        self.assertTrue(
-            len(res["data"]["model"].model.layers) == 4)
+        self.assertEqual(
+            len(res["data"]["model"].layers),
+            3)
     # end of test_dataset_regression
 
     def test_dataset_regression_scaler_utils(self):
@@ -114,8 +115,9 @@ class TestRegression(BaseTestCase):
             SUCCESS)
         self.assertTrue(
             res["data"]["model"])
-        self.assertTrue(
-            len(res["data"]["model"].model.layers) == 4)
+        self.assertEqual(
+            len(res["data"]["model"].layers),
+            3)
 
         predictions = res["data"]["sample_predictions"]
         self.assertTrue(
