@@ -2,7 +2,7 @@ import os
 import json
 import numpy as np
 import pandas as pd
-from antinex_utils.log.setup_logging import build_colorized_logger
+from spylunking.log.setup_logging import build_colorized_logger
 from antinex_utils.utils import ev
 from antinex_utils.consts import VALID
 from antinex_utils.consts import INVALID

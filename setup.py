@@ -58,6 +58,7 @@ install_requires = [
     "sphinx",
     "sphinx-autobuild",
     "sphinx_rtd_theme",
+    "spylunking",
     "tox",
     "unittest2",
     "mock"
@@ -79,7 +80,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "antinex_utils"))
 setup(
     name="antinex-utils",
     cmdclass={"test": PyTest},
-    version="1.0.20",
+    version="1.0.21",
     description="AntiNex Utilities for Keras and Tensorflow",
     long_description="" +
     "Standalone AntiNex Utilities for Keras and Tensorflow",
