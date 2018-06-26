@@ -7,7 +7,7 @@ from antinex_utils.consts import NOTRUN
 
 
 log = build_colorized_logger(
-    name=__name__)
+    name='merge_inverse_data_into_original')
 
 
 def merge_inverse_data_into_original(

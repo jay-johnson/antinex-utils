@@ -11,7 +11,7 @@ from antinex_utils.utils import rnow
 
 
 log = build_colorized_logger(
-    name=__name__)
+    name='prepare_dataset_tools')
 
 
 def find_all_headers(

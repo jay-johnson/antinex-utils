@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 
 
 log = build_colorized_logger(
-    name=__name__)
+    name='build_scaler_train_and_test_datasets')
 
 
 def build_scaler_train_and_test_datasets(

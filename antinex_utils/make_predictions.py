@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt  # noqa
 
 
 log = build_colorized_logger(
-    name=__name__)
+    name='make_predict')
 
 
 def build_regression_dnn(

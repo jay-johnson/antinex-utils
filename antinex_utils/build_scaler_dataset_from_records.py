@@ -8,7 +8,7 @@ from antinex_utils.consts import NOTRUN
 
 
 log = build_colorized_logger(
-    name=__name__)
+    name='build_scaler_dataset')
 
 
 def build_scaler_dataset_from_records(

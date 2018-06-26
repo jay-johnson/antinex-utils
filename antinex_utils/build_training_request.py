@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 
 
 log = build_colorized_logger(
-    name=__name__)
+    name='build_training_request')
 
 
 def build_training_request(
