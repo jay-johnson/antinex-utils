@@ -10,8 +10,8 @@ from antinex_utils.utils import ppj
 from antinex_utils.utils import rnow
 
 
-name = "prepare"
-log = build_colorized_logger(name=name)
+log = build_colorized_logger(
+    name=__name__)
 
 
 def find_all_headers(

@@ -10,8 +10,8 @@ from antinex_utils.consts import ERROR
 from sklearn.model_selection import train_test_split
 
 
-name = "build-training"
-log = build_colorized_logger(name=name)
+log = build_colorized_logger(
+    name=__name__)
 
 
 def build_training_request(

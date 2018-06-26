@@ -38,8 +38,8 @@ matplotlib.use("Agg")  # noqa
 import matplotlib.pyplot as plt  # noqa
 
 
-name = "make-predict"
-log = build_colorized_logger(name=name)
+log = build_colorized_logger(
+    name=__name__)
 
 
 def build_regression_dnn(

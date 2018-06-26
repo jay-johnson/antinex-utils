@@ -7,8 +7,8 @@ from antinex_utils.consts import ERR
 from antinex_utils.consts import NOTRUN
 
 
-name = "build-scaler-dataset"
-log = build_colorized_logger(name=name)
+log = build_colorized_logger(
+    name=__name__)
 
 
 def build_scaler_dataset_from_records(

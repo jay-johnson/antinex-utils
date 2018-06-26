@@ -9,8 +9,8 @@ from antinex_utils.build_scaler_dataset_from_records import \
 from sklearn.model_selection import train_test_split
 
 
-name = "scaler-train-test"
-log = build_colorized_logger(name=name)
+log = build_colorized_logger(
+    name=__name__)
 
 
 def build_scaler_train_and_test_datasets(

@@ -6,8 +6,8 @@ from antinex_utils.consts import ERR
 from antinex_utils.consts import NOTRUN
 
 
-name = "merge-dataset"
-log = build_colorized_logger(name=name)
+log = build_colorized_logger(
+    name=__name__)
 
 
 def merge_inverse_data_into_original(
