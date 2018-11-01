@@ -25,6 +25,14 @@ class PyTest(TestCommand):
         errno = pytest.main(shlex.split(self.pytest_args))
         sys.exit(errno)
 
+long_description = ''
+try:
+    import pypandoc
+    long_description = pypandoc.convert(
+        'README.rst',
+        'rst')
+except(IOError, ImportError):
+    long_description = open('README.rst').read()
 
 cur_path, cur_script = os.path.split(sys.argv[0])
 os.chdir(os.path.abspath(cur_path))
@@ -52,6 +60,7 @@ install_requires = [
     "pycodestyle<=2.3.1",
     "pydocstyle",
     "pylint",
+    "pypandoc",
     "recommonmark",
     "requests",
     "scikit-learn",
@@ -80,10 +89,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "antinex_utils"))
 setup(
     name="antinex-utils",
     cmdclass={"test": PyTest},
-    version="1.2.0",
+    version="1.2.1",
     description="AntiNex Utilities for Keras and Tensorflow",
-    long_description="" +
-    "Standalone AntiNex Utilities for Keras and Tensorflow",
+    long_description=long_description,
     author="Jay Johnson",
     author_email="jay.p.h.johnson@gmail.com",
     url="https://github.com/jay-johnson/antinex-utils",
