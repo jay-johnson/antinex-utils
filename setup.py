@@ -10,6 +10,14 @@ except ImportError:
 
 from setuptools.command.test import test as TestCommand
 
+"""
+https://packaging.python.org/guides/making-a-pypi-friendly-readme/
+check the README.rst works on pypi as the
+long_description with:
+twine check dist/*
+"""
+long_description = open('README.rst').read()
+
 
 class PyTest(TestCommand):
     user_options = [('pytest-args=', 'a', "Arguments to pass to pytest")]
@@ -26,14 +34,7 @@ class PyTest(TestCommand):
         sys.exit(errno)
 
 
-long_description = ''
-try:
-    import pypandoc
-    long_description = pypandoc.convert(
-        'README.rst',
-        'rst')
-except(IOError, ImportError):
-    long_description = open('README.rst').read()
+long_description = open('README.rst').read()
 
 cur_path, cur_script = os.path.split(sys.argv[0])
 os.chdir(os.path.abspath(cur_path))
@@ -61,7 +62,6 @@ install_requires = [
     "pycodestyle<=2.3.1",
     "pydocstyle",
     "pylint",
-    "pypandoc",
     "recommonmark",
     "requests",
     "scikit-learn",
@@ -90,7 +90,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "antinex_utils"))
 setup(
     name="antinex-utils",
     cmdclass={"test": PyTest},
-    version="1.2.2",
+    version="1.2.3",
     description="AntiNex Utilities for Keras and Tensorflow",
     long_description=long_description,
     author="Jay Johnson",
