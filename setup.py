@@ -92,6 +92,7 @@ setup(
     cmdclass={"test": PyTest},
     version="1.2.4",
     description="AntiNex Utilities for Keras and Tensorflow",
+    long_description_content_type='text/x-rst',
     long_description=long_description,
     author="Jay Johnson",
     author_email="jay.p.h.johnson@gmail.com",
