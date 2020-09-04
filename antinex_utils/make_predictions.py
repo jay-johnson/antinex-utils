@@ -183,7 +183,6 @@ def build_classification_dnn(
                   "dnn model_json={}")
                  .format(
                      label,
-                     num_features,
                      model_json))
         model = model_from_json(json.dumps(model_json))
     elif model_desc:
@@ -1854,8 +1853,7 @@ def make_predictions(
                     pd.HDFStore(weights_file)
                 log.info(("label={} HDFStore getting keys")
                          .format(
-                            label,
-                            weights_file))
+                            label))
                 hdf_keys = hdf_store.keys()
                 model_weights = {
                     "keys": hdf_keys,

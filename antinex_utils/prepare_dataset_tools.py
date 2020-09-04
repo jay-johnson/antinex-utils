@@ -336,13 +336,9 @@ def build_csv(
                             len(clean_df.index)))
 
                 if len(clean_df.columns.values) == 0:
-                    log.error(("Postproc clean df has no columns")
-                              .format(
-                                log_id))
+                    log.error("Postproc clean df has no columns")
                 if len(clean_df.index) == 0:
-                    log.error(("Postproc clean df has no rows")
-                              .format(
-                                log_id))
+                    log.error("Postproc clean df has no rows")
 
                 cleaned_features = clean_df.columns.values
                 cleaned_to_process = []
